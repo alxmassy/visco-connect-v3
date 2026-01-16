@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" 
+           Name="Camera Server Qt6" 
+           Language="1033" 
+           Version="1.0.0.0" 
+           Manufacturer="Camera Server Solutions" 
+           UpgradeCode="A1B2C3D4-E5F6-7890-ABCD-123456789ABC">
+    
+    <Package InstallerVersion="200" 
+             Compressed="yes" 
+             InstallScope="perMachine" 
+             Platform="x64"
+             Description="Camera Server Qt6 - IP Camera Port Forwarding Application" />
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- Feature definition -->
+    <Feature Id="ProductFeature" Title="Camera Server Qt6 Application" Level="1">
+      <ComponentGroupRef Id="HarvestedFiles" />
+      <ComponentRef Id="DesktopShortcut" />
+      <ComponentRef Id="ProgramMenuShortcuts" />
+    </Feature>
+
+    <!-- Directory structure -->
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="Camera Server Qt6" />
+      </Directory>
+      <Directory Id="DesktopFolder" Name="Desktop" />
+      <Directory Id="ProgramMenuFolder" Name="Programs">
+        <Directory Id="ApplicationProgramsFolder" Name="Camera Server Qt6" />
+      </Directory>
+    </Directory>
+
+    <!-- Desktop shortcut -->
+    <Component Id="DesktopShortcut" Directory="DesktopFolder" Guid="A1B2C3D4-E5F6-7890-ABCD-111111111111">
+      <Shortcut Id="DesktopShortcut"
+                Name="Camera Server Qt6"
+                Description="Camera Server Qt6 - IP Camera Port Forwarding with WireGuard VPN"
+                Target="[INSTALLFOLDER]ViscoConnect.exe"
+                WorkingDirectory="INSTALLFOLDER" />
+      <RemoveFolder Id="DesktopFolder" On="uninstall" />
+      <RegistryValue Root="HKCU" 
+                     Key="Software\CameraServerQt6" 
+                     Name="DesktopShortcut" 
+                     Type="integer" 
+                     Value="1" 
+                     KeyPath="yes" />
+    </Component>
+
+    <!-- Program menu shortcuts -->
+    <Component Id="ProgramMenuShortcuts" Directory="ApplicationProgramsFolder" Guid="A1B2C3D4-E5F6-7890-ABCD-222222222222">
+      <Shortcut Id="ApplicationStartMenuShortcut"
+                Name="Camera Server Qt6"
+                Description="Camera Server Qt6 - IP Camera Port Forwarding with WireGuard VPN"
+                Target="[INSTALLFOLDER]ViscoConnect.exe"
+                WorkingDirectory="INSTALLFOLDER" />
+      <Shortcut Id="UninstallProduct"
+                Name="Uninstall Camera Server Qt6"
+                Target="[SystemFolder]msiexec.exe"
+                Arguments="/x [ProductCode]"
+                Description="Uninstalls Camera Server Qt6" />
+      <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall" />
+      <RegistryValue Root="HKCU" 
+                     Key="Software\CameraServerQt6" 
+                     Name="ProgramMenuShortcut" 
+                     Type="integer" 
+                     Value="1" 
+                     KeyPath="yes" />
+    </Component>
+
+    <!-- Firewall Rules using simpler approach -->
+    <CustomAction Id="AddFirewallRulesTcp" 
+                  ExeCommand="[SystemFolder]netsh.exe"
+                  Execute="immediate"
+                  Return="ignore" />
+
+    <CustomAction Id="AddFirewallRulesIcmp" 
+                  ExeCommand="[SystemFolder]netsh.exe"
+                  Execute="immediate"  
+                  Return="ignore" />
+
+    <!-- Installation sequence with PowerShell scripts -->
+    <Binary Id="AddFirewallScript" SourceFile="$(var.SourceDir)\installer\AddFirewallRules.ps1" />
+    <Binary Id="RemoveFirewallScript" SourceFile="$(var.SourceDir)\installer\RemoveFirewallRules.ps1" />
+
+    <CustomAction Id="AddFirewallRules" 
+                  BinaryKey="AddFirewallScript"
+                  ExeCommand="powershell.exe -ExecutionPolicy Bypass -File &quot;[#AddFirewallScript]&quot;"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
+
+    <CustomAction Id="RemoveFirewallRules" 
+                  BinaryKey="RemoveFirewallScript"
+                  ExeCommand="powershell.exe -ExecutionPolicy Bypass -File &quot;[#RemoveFirewallScript]&quot;"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
+
+    <InstallExecuteSequence>
+      <Custom Action="AddFirewallRules" After="InstallFiles">NOT Installed</Custom>
+      <Custom Action="RemoveFirewallRules" After="RemoveFiles">REMOVE="ALL"</Custom>
+    </InstallExecuteSequence>
+
+    <!-- UI for installation -->
+    <UIRef Id="WixUI_InstallDir" />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+    <WixVariable Id="WixUILicenseRtf" Value="$(var.SourceDir)\installer\License.rtf" />
+
+  </Product>
+</Wix>

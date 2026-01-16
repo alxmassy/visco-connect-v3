@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+
+  <!-- ===================== PRODUCT METADATA ===================== -->
+  <Product Id="*"
+           Name="Visco Connect Demo build v2.1.5"
+           Language="1033"
+           Version="2.1.5.0"
+           Manufacturer="Visco Technologies"
+           UpgradeCode="A1B2C3D4-E5F6-7890-ABCD-123456789ABC">
+
+    <Package InstallerVersion="200"
+             Compressed="yes"
+             InstallScope="perMachine"
+             Platform="x64"
+             Description="Visco Connect Demo build v2.1.5 – IP Camera Port Forwarding Application (Demo Version)" />
+
+    <Icon Id="ApplicationIcon"
+          SourceFile="$(var.SourceDir)\installer\logo.ico" />
+    <Property Id="ARPPRODUCTICON"
+              Value="ApplicationIcon" />
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Feature Id="ProductFeature"
+             Title="Visco Connect Demo build v2.1.5 Application"
+             Level="1">
+      <ComponentGroupRef Id="HarvestedFiles" />
+      <ComponentRef Id="DesktopShortcut" />
+      <ComponentRef Id="ProgramMenuShortcuts" />
+    </Feature>
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="Visco Connect Demo" />
+      </Directory>
+
+      <Directory Id="DesktopFolder" Name="Desktop" />
+
+      <Directory Id="ProgramMenuFolder" Name="Programs">
+        <Directory Id="ApplicationProgramsFolder" Name="Visco Connect Demo" />
+      </Directory>
+    </Directory>
+
+    <!-- Desktop shortcut -->
+    <Component Id="DesktopShortcut"
+               Guid="A1B2C3D4-E5F6-7890-ABCD-111111111111"
+               Directory="DesktopFolder">
+      <Shortcut Id="DesktopShortcut"
+                Name="Visco Connect Demo"
+                Description="Visco Connect Demo build v2.1.5 – IP Camera Port Forwarding (Demo Version)"
+                Target="[INSTALLFOLDER]Visco Connect.exe"
+                WorkingDirectory="INSTALLFOLDER"
+                Icon="ApplicationIcon" />
+      <RemoveFolder Id="DesktopFolder" On="uninstall" />
+      <RegistryValue Root="HKCU"
+                     Key="Software\ViscoConnectDemo"
+                     Name="DesktopShortcut"
+                     Type="integer"
+                     Value="1"
+                     KeyPath="yes" />
+    </Component>
+
+    <!-- Start-menu shortcuts -->
+    <Component Id="ProgramMenuShortcuts"
+               Guid="A1B2C3D4-E5F6-7890-ABCD-222222222222"
+               Directory="ApplicationProgramsFolder">
+      <Shortcut Id="ApplicationStartMenuShortcut"
+                Name="Visco Connect Demo"
+                Description="Visco Connect Demo build v2.1.5 – IP Camera Port Forwarding (Demo Version)"
+                Target="[INSTALLFOLDER]Visco Connect.exe"
+                WorkingDirectory="INSTALLFOLDER"
+                Icon="ApplicationIcon" />
+      <Shortcut Id="UninstallProduct"
+                Name="Uninstall Visco Connect Demo"
+                Target="[SystemFolder]msiexec.exe"
+                Arguments="/x [ProductCode]"
+                Description="Uninstalls Visco Connect Demo" />
+      <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall" />
+      <RegistryValue Root="HKCU"
+                     Key="Software\ViscoConnectDemo"
+                     Name="ProgramMenuShortcut"
+                     Type="integer"
+                     Value="1"
+                     KeyPath="yes" />
+    </Component>
+
+    <!-- ===================== USER INTERFACE ===================== -->
+    <UIRef Id="WixUI_InstallDir" />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+    <WixVariable Id="WixUILicenseRtf"
+                 Value="$(var.SourceDir)\installer\License.rtf" />
+
+  </Product>
+
+</Wix>

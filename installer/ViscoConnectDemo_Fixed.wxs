@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">  <Product Id="*" 
+           Name="Visco Connect Demo build v2.1.5" 
+           Language="1033" 
+           Version="2.1.5.0" 
+           Manufacturer="Visco Technologies" 
+           UpgradeCode="A1B2C3D4-E5F6-7890-ABCD-123456789ABC">
+    
+    <Package InstallerVersion="200" 
+             Compressed="yes" 
+             InstallScope="perMachine" 
+             Platform="x64"
+             Description="Visco Connect Demo build v2.1.5 - IP Camera Port Forwarding Application (Demo Version)" />
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    <MediaTemplate EmbedCab="yes" />    <!-- Feature definition -->
+    <Feature Id="ProductFeature" Title="Visco Connect Demo build v2.1.5 Application" Level="1">
+      <ComponentGroupRef Id="HarvestedFiles" />
+      <ComponentRef Id="DesktopShortcut" />
+      <ComponentRef Id="ProgramMenuShortcuts" />
+    </Feature>
+
+    <!-- Directory structure -->    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="Visco Connect Demo" />
+      </Directory>
+      <Directory Id="DesktopFolder" Name="Desktop" />      <Directory Id="ProgramMenuFolder" Name="Programs">
+        <Directory Id="ApplicationProgramsFolder" Name="Visco Connect Demo" />
+      </Directory>
+    </Directory>
+
+    <!-- Desktop shortcut -->
+    <Component Id="DesktopShortcut" Directory="DesktopFolder" Guid="A1B2C3D4-E5F6-7890-ABCD-111111111111">      <Shortcut Id="DesktopShortcut"
+                Name="Visco Connect Demo"
+                Description="Visco Connect Demo build v2.1.5 - IP Camera Port Forwarding (Demo Version)"
+                Target="[INSTALLFOLDER]ViscoConnect.exe"
+                WorkingDirectory="INSTALLFOLDER" />
+      <RemoveFolder Id="DesktopFolder" On="uninstall" />      <RegistryValue Root="HKCU" 
+                     Key="Software\ViscoConnectDemo" 
+                     Name="DesktopShortcut" 
+                     Type="integer" 
+                     Value="1" 
+                     KeyPath="yes" />
+    </Component>
+
+    <!-- Program menu shortcuts -->
+    <Component Id="ProgramMenuShortcuts" Directory="ApplicationProgramsFolder" Guid="A1B2C3D4-E5F6-7890-ABCD-222222222222">      <Shortcut Id="ApplicationStartMenuShortcut"
+                Name="Visco Connect Demo"
+                Description="Visco Connect Demo build v2.1.5 - IP Camera Port Forwarding (Demo Version)"
+                Target="[INSTALLFOLDER]ViscoConnect.exe"
+                WorkingDirectory="INSTALLFOLDER" />
+      <Shortcut Id="UninstallProduct"
+                Name="Uninstall Visco Connect Demo"
+                Target="[SystemFolder]msiexec.exe"
+                Arguments="/x [ProductCode]"
+                Description="Uninstalls Visco Connect Demo" />
+      <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall" />      <RegistryValue Root="HKCU" 
+                     Key="Software\ViscoConnectDemo" 
+                     Name="ProgramMenuShortcut" 
+                     Type="integer" 
+                     Value="1" 
+                     KeyPath="yes" />
+    </Component>    <!-- Firewall Custom Actions -->
+    <CustomAction Id="AddFirewallRules" 
+                  Execute="deferred" 
+                  Impersonate="no"
+                  ExeCommand='cmd.exe /c "netsh advfirewall firewall add rule name=&quot;Visco Connect Demo Echo&quot; dir=in action=allow protocol=TCP localport=7777 && netsh advfirewall firewall add rule name=&quot;ICMP Allow incoming V4 echo request&quot; protocol=icmpv4:8,any dir=in action=allow"'
+                  Return="ignore" />
+
+    <CustomAction Id="RemoveFirewallRules" 
+                  Execute="deferred" 
+                  Impersonate="no"
+                  ExeCommand='cmd.exe /c "netsh advfirewall firewall delete rule name=&quot;Visco Connect Demo Echo&quot; & netsh advfirewall firewall delete rule name=&quot;ICMP Allow incoming V4 echo request&quot;"'
+                  Return="ignore" />
+
+    <!-- Installation sequence -->
+    <InstallExecuteSequence>
+      <Custom Action="AddFirewallRules" After="InstallFiles">NOT Installed</Custom>
+      <Custom Action="RemoveFirewallRules" After="RemoveFiles">REMOVE="ALL"</Custom>
+    </InstallExecuteSequence>    <!-- UI for installation -->
+    <UIRef Id="WixUI_InstallDir" />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+    <WixVariable Id="WixUILicenseRtf" Value="$(var.SourceDir)\installer\License.rtf" />
+
+  </Product>
+</Wix>

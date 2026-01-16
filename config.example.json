@@ -1,0 +1,28 @@
+{
+    "autoStart": false,
+    "echoServerEnabled": true,
+    "echoServerPort": 7777,
+    "apiBaseUrl": "http://54.225.63.242:8086",
+    "cameras": [
+        {
+            "id": "example-camera-1",
+            "name": "Front Door Camera",
+            "ipAddress": "192.168.1.200",
+            "port": 554,
+            "username": "admin",
+            "password": "password123",
+            "enabled": true,
+            "externalPort": 8551
+        },
+        {
+            "id": "example-camera-2", 
+            "name": "Backyard Camera",
+            "ipAddress": "192.168.1.201",
+            "port": 554,
+            "username": "admin",
+            "password": "password123",
+            "enabled": true,
+            "externalPort": 8552
+        }
+    ]
+}

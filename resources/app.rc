@@ -1,0 +1,5 @@
+// UAC Manifest - Resource ID 1, Type 24 (RT_MANIFEST)
+1 24 "app.manifest"
+
+// Application icon resource
+101 ICON "logo.ico"

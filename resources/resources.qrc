@@ -1,0 +1,11 @@
+<RCC>
+    <qresource prefix="/icons">
+        <file>camera_server_icon.svg</file>
+        <file>logo.png</file>
+        <file>logo.svg</file>
+        <file>logo.ico</file>
+    </qresource>
+    <qresource prefix="/images">
+        <!-- Add your images here -->
+    </qresource>
+</RCC>

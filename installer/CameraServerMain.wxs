@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" 
+           Name="Camera Server Qt6" 
+           Language="1033" 
+           Version="1.0.0.0" 
+           Manufacturer="Camera Server Solutions" 
+           UpgradeCode="A1B2C3D4-E5F6-7890-ABCD-123456789ABC">
+    
+    <Package InstallerVersion="200" 
+             Compressed="yes" 
+             InstallScope="perMachine" 
+             Platform="x64"
+             Description="Camera Server Qt6 - IP Camera Port Forwarding Application"
+             Comments="Professional IP Camera Port Forwarding Solution with WireGuard VPN Integration" />
+
+    <!-- Allow upgrades and prevent downgrades -->
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    
+    <!-- Embed CAB file in MSI -->
+    <MediaTemplate EmbedCab="yes" />    <!-- Feature definition -->
+    <Feature Id="ProductFeature" Title="Camera Server Qt6 Application" Level="1">
+      <ComponentGroupRef Id="HarvestedFiles" />
+      <ComponentRef Id="DesktopShortcut" />
+      <ComponentRef Id="ProgramMenuShortcuts" />
+    </Feature>    <!-- Directory structure -->
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="Camera Server Qt6" />
+      </Directory>
+      <Directory Id="DesktopFolder" Name="Desktop" />
+      <Directory Id="ProgramMenuFolder" Name="Programs">
+        <Directory Id="ApplicationProgramsFolder" Name="Camera Server Qt6" />
+      </Directory>
+      <Directory Id="SystemFolder" />
+    </Directory>
+
+    <!-- Desktop shortcut -->
+    <Component Id="DesktopShortcut" Directory="DesktopFolder" Guid="A1B2C3D4-E5F6-7890-ABCD-111111111111">
+      <Shortcut Id="DesktopShortcut"
+                Name="Camera Server Qt6"
+                Description="Camera Server Qt6 - IP Camera Port Forwarding with WireGuard VPN"
+                Target="[INSTALLFOLDER]ViscoConnect.exe"
+                WorkingDirectory="INSTALLFOLDER"
+                Icon="CameraServerIcon" />
+      <RemoveFolder Id="DesktopFolder" On="uninstall" />
+      <RegistryValue Root="HKCU" 
+                     Key="Software\CameraServerQt6" 
+                     Name="DesktopShortcut" 
+                     Type="integer" 
+                     Value="1" 
+                     KeyPath="yes" />
+    </Component>
+
+    <!-- Program menu shortcuts -->
+    <Component Id="ProgramMenuShortcuts" Directory="ApplicationProgramsFolder" Guid="A1B2C3D4-E5F6-7890-ABCD-222222222222">
+      <Shortcut Id="ApplicationStartMenuShortcut"
+                Name="Camera Server Qt6"
+                Description="Camera Server Qt6 - IP Camera Port Forwarding with WireGuard VPN"
+                Target="[INSTALLFOLDER]ViscoConnect.exe"
+                WorkingDirectory="INSTALLFOLDER"
+                Icon="CameraServerIcon" />
+      <Shortcut Id="UninstallProduct"
+                Name="Uninstall Camera Server Qt6"
+                Target="[SystemFolder]msiexec.exe"
+                Arguments="/x [ProductCode]"
+                Description="Uninstalls Camera Server Qt6" />
+      <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall" />
+      <RegistryValue Root="HKCU" 
+                     Key="Software\CameraServerQt6" 
+                     Name="ProgramMenuShortcut" 
+                     Type="integer" 
+                     Value="1" 
+                     KeyPath="yes" />
+    </Component>    <!-- Icon definition - will use default if not found -->
+    <Icon Id="CameraServerIcon" SourceFile="$(var.SourceDir)\installer\camera_server_icon.ico" />    <!-- Custom actions for firewall rules -->
+    <Property Id="AddTcpFirewallCmd" Value="netsh advfirewall firewall add rule name=&quot;Camera Server Echo&quot; dir=in action=allow protocol=TCP localport=7777" />
+    <Property Id="AddIcmpFirewallCmd" Value="netsh advfirewall firewall add rule name=&quot;ICMP Allow incoming V4 echo request&quot; protocol=icmpv4:8,any dir=in action=allow" />
+    <Property Id="RemoveTcpFirewallCmd" Value="netsh advfirewall firewall delete rule name=&quot;Camera Server Echo&quot;" />
+    <Property Id="RemoveIcmpFirewallCmd" Value="netsh advfirewall firewall delete rule name=&quot;ICMP Allow incoming V4 echo request&quot;" />
+
+    <CustomAction Id="AddTcpFirewallRule" 
+                  Execute="deferred" 
+                  Impersonate="no" 
+                  Property="AddTcpFirewallCmd"
+                  ExeCommand="[SystemFolder]cmd.exe /c [AddTcpFirewallCmd]"
+                  Return="ignore" />
+
+    <CustomAction Id="AddIcmpFirewallRule" 
+                  Execute="deferred" 
+                  Impersonate="no" 
+                  Property="AddIcmpFirewallCmd"
+                  ExeCommand="[SystemFolder]cmd.exe /c [AddIcmpFirewallCmd]"
+                  Return="ignore" />
+
+    <CustomAction Id="RemoveTcpFirewallRule" 
+                  Execute="deferred" 
+                  Impersonate="no" 
+                  Property="RemoveTcpFirewallCmd"
+                  ExeCommand="[SystemFolder]cmd.exe /c [RemoveTcpFirewallCmd]"
+                  Return="ignore" />
+
+    <CustomAction Id="RemoveIcmpFirewallRule" 
+                  Execute="deferred" 
+                  Impersonate="no" 
+                  Property="RemoveIcmpFirewallCmd"
+                  ExeCommand="[SystemFolder]cmd.exe /c [RemoveIcmpFirewallCmd]"
+                  Return="ignore" />
+
+    <!-- Installation sequence -->
+    <InstallExecuteSequence>
+      <Custom Action="AddTcpFirewallRule" After="InstallFiles">NOT Installed</Custom>
+      <Custom Action="AddIcmpFirewallRule" After="AddTcpFirewallRule">NOT Installed</Custom>
+      <Custom Action="RemoveTcpFirewallRule" After="RemoveFiles">REMOVE="ALL"</Custom>
+      <Custom Action="RemoveIcmpFirewallRule" After="RemoveTcpFirewallRule">REMOVE="ALL"</Custom>
+    </InstallExecuteSequence>
+
+    <!-- UI for installation -->
+    <UIRef Id="WixUI_InstallDir" />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+
+    <!-- License agreement -->
+    <WixVariable Id="WixUILicenseRtf" Value="$(var.SourceDir)\installer\License.rtf" />
+
+  </Product>
+</Wix>

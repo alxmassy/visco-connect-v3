@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" 
+           Name="Camera Server Qt6" 
+           Language="1033" 
+           Version="1.0.0.0" 
+           Manufacturer="Your Company" 
+           UpgradeCode="12345678-1234-1234-1234-123456789012">
+    
+    <Package InstallerVersion="200" 
+             Compressed="yes" 
+             InstallScope="perMachine" 
+             Platform="x64"
+             Description="Camera Server Qt6 - IP Camera Port Forwarding Application" />
+
+    <!-- Allow upgrades and prevent downgrades -->
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    
+    <!-- Embed CAB file in MSI -->
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- Feature definition -->
+    <Feature Id="ProductFeature" Title="Camera Server Qt6" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+      <ComponentGroupRef Id="QtDependencies" />
+      <ComponentGroupRef Id="QtPlugins" />
+      <ComponentRef Id="DesktopShortcut" />
+    </Feature>
+
+    <!-- Directory structure -->
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="Camera Server Qt6" />
+      </Directory>
+      <Directory Id="DesktopFolder" Name="Desktop" />
+      <Directory Id="ProgramMenuFolder" Name="Programs">
+        <Directory Id="ApplicationProgramsFolder" Name="Camera Server Qt6" />
+      </Directory>
+    </Directory>
+
+    <!-- Main application components -->
+    <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+      <Component Id="MainExecutable" Guid="*">
+        <File Id="MainExe" 
+              Source="$(var.SourceDir)\build\bin\ViscoConnect.exe" 
+              KeyPath="yes" />
+        <!-- Windows service registration -->
+        <ServiceInstall Id="CameraServerService"
+                        Type="ownProcess"
+                        Vital="no"
+                        Name="CameraServerQt6"
+                        DisplayName="Camera Server Qt6 Service"
+                        Description="Camera Server Qt6 IP Camera Port Forwarding Service"
+                        Start="auto"
+                        Account="LocalSystem"
+                        ErrorControl="ignore"
+                        Interactive="no" />
+        <ServiceControl Id="StartCameraServerService"
+                        Stop="both"
+                        Remove="uninstall"
+                        Name="CameraServerQt6"
+                        Wait="yes" />
+      </Component>
+      
+      <Component Id="WireGuardDlls" Guid="*">
+        <File Id="TunnelDll" Source="$(var.SourceDir)\build\bin\tunnel.dll" />
+        <File Id="WireGuardDll" Source="$(var.SourceDir)\build\bin\wireguard.dll" />
+      </Component>
+
+      <Component Id="ConfigFiles" Guid="*">
+        <File Id="ExampleConfig" Source="$(var.SourceDir)\config.example.json" />
+      </Component>
+    </ComponentGroup>
+
+    <!-- Qt Dependencies -->
+    <ComponentGroup Id="QtDependencies" Directory="INSTALLFOLDER">
+      <Component Id="QtCore" Guid="*">
+        <File Id="Qt6Core" Source="$(var.SourceDir)\build\bin\Qt6Core.dll" />
+      </Component>
+      <Component Id="QtGui" Guid="*">
+        <File Id="Qt6Gui" Source="$(var.SourceDir)\build\bin\Qt6Gui.dll" />
+      </Component>
+      <Component Id="QtNetwork" Guid="*">
+        <File Id="Qt6Network" Source="$(var.SourceDir)\build\bin\Qt6Network.dll" />
+      </Component>
+      <Component Id="QtWidgets" Guid="*">
+        <File Id="Qt6Widgets" Source="$(var.SourceDir)\build\bin\Qt6Widgets.dll" />
+      </Component>
+      <Component Id="QtSvg" Guid="*">
+        <File Id="Qt6Svg" Source="$(var.SourceDir)\build\bin\Qt6Svg.dll" />
+      </Component>
+      <Component Id="GccLibs" Guid="*">
+        <File Id="LibGcc" Source="$(var.SourceDir)\build\bin\libgcc_s_seh-1.dll" />
+        <File Id="LibStdCpp" Source="$(var.SourceDir)\build\bin\libstdc++-6.dll" />
+        <File Id="LibWinPthread" Source="$(var.SourceDir)\build\bin\libwinpthread-1.dll" />
+      </Component>
+      <Component Id="OpenGL" Guid="*">
+        <File Id="OpenGL32SW" Source="$(var.SourceDir)\build\bin\opengl32sw.dll" />
+        <File Id="D3DCompiler" Source="$(var.SourceDir)\build\bin\D3Dcompiler_47.dll" />
+      </Component>
+    </ComponentGroup>    <!-- Qt Plugins -->
+    <ComponentGroup Id="QtPlugins" Directory="INSTALLFOLDER">
+      <!-- Platforms directory -->
+      <Component Id="PlatformsDir" Directory="INSTALLFOLDER" Guid="*">
+        <CreateFolder />
+      </Component>
+      
+      <!-- Individual plugin directories with proper subdirectory handling -->
+      <Component Id="PlatformsPlugin" Guid="*">
+        <CreateFolder Directory="INSTALLFOLDER" />
+        <File Id="PlatformsQwindows" Source="$(var.SourceDir)\build\bin\platforms\qwindows.dll" />
+      </Component>
+      
+      <Component Id="IconEnginesPlugin" Guid="*">
+        <CreateFolder Directory="INSTALLFOLDER" />
+        <File Id="IconEnginesSvg" Source="$(var.SourceDir)\build\bin\iconengines\qsvgicon.dll" />
+      </Component>
+      
+      <Component Id="ImageFormatsPlugin" Guid="*">
+        <CreateFolder Directory="INSTALLFOLDER" />
+        <File Id="ImageFormatsJpeg" Source="$(var.SourceDir)\build\bin\imageformats\qjpeg.dll" />
+        <File Id="ImageFormatsIco" Source="$(var.SourceDir)\build\bin\imageformats\qico.dll" />
+        <File Id="ImageFormatsPng" Source="$(var.SourceDir)\build\bin\imageformats\qpng.dll" />
+      </Component>
+      
+      <Component Id="StylesPlugin" Guid="*">
+        <CreateFolder Directory="INSTALLFOLDER" />
+        <File Id="StylesWindows" Source="$(var.SourceDir)\build\bin\styles\qwindowsvistastyle.dll" />
+      </Component>
+      
+      <Component Id="NetworkInfoPlugin" Guid="*">
+        <CreateFolder Directory="INSTALLFOLDER" />
+        <File Id="NetworkInfoWindows" Source="$(var.SourceDir)\build\bin\networkinformation\qnetworklistmanager.dll" />
+      </Component>
+      
+      <Component Id="TlsPlugin" Guid="*">
+        <CreateFolder Directory="INSTALLFOLDER" />
+        <File Id="TlsSchannel" Source="$(var.SourceDir)\build\bin\tls\qschannelbackend.dll" />
+        <File Id="TlsCert" Source="$(var.SourceDir)\build\bin\tls\qcertonlybackend.dll" />
+      </Component>
+    </ComponentGroup>
+
+    <!-- Desktop shortcut -->
+    <Component Id="DesktopShortcut" Directory="DesktopFolder" Guid="*">
+      <Shortcut Id="DesktopShortcut"
+                Name="Camera Server Qt6"
+                Description="Camera Server Qt6 - IP Camera Port Forwarding"
+                Target="[INSTALLFOLDER]ViscoConnect.exe"
+                WorkingDirectory="INSTALLFOLDER"
+                Icon="CameraServerIcon" />
+      <RemoveFolder Id="DesktopFolder" On="uninstall" />
+      <RegistryValue Root="HKCU" 
+                     Key="Software\CameraServerQt6" 
+                     Name="installed" 
+                     Type="integer" 
+                     Value="1" 
+                     KeyPath="yes" />
+    </Component>
+
+    <!-- Program menu shortcuts -->
+    <Component Id="ProgramMenuShortcuts" Directory="ApplicationProgramsFolder" Guid="*">
+      <Shortcut Id="ApplicationStartMenuShortcut"
+                Name="Camera Server Qt6"
+                Description="Camera Server Qt6 - IP Camera Port Forwarding"
+                Target="[INSTALLFOLDER]ViscoConnect.exe"
+                WorkingDirectory="INSTALLFOLDER"
+                Icon="CameraServerIcon" />
+      <Shortcut Id="UninstallProduct"
+                Name="Uninstall Camera Server Qt6"
+                Target="[SystemFolder]msiexec.exe"
+                Arguments="/x [ProductCode]"
+                Description="Uninstalls Camera Server Qt6" />
+      <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall" />
+      <RegistryValue Root="HKCU" 
+                     Key="Software\CameraServerQt6" 
+                     Name="installed" 
+                     Type="integer" 
+                     Value="1" 
+                     KeyPath="yes" />
+    </Component>
+
+    <!-- Icon definition -->
+    <Icon Id="CameraServerIcon" SourceFile="$(var.SourceDir)\resources\camera_server_icon.ico" />
+
+    <!-- Custom actions for firewall rules -->
+    <CustomAction Id="AddFirewallRules" 
+                  Execute="deferred" 
+                  Impersonate="no" 
+                  ExeCommand="netsh advfirewall firewall add rule name=&quot;Camera Server Echo&quot; dir=in action=allow protocol=TCP localport=7777" 
+                  Return="ignore" />
+
+    <CustomAction Id="AddICMPRule" 
+                  Execute="deferred" 
+                  Impersonate="no" 
+                  ExeCommand="netsh advfirewall firewall add rule name=&quot;ICMP Allow incoming V4 echo request&quot; protocol=icmpv4:8,any dir=in action=allow" 
+                  Return="ignore" />
+
+    <CustomAction Id="RemoveFirewallRules" 
+                  Execute="deferred" 
+                  Impersonate="no" 
+                  ExeCommand="netsh advfirewall firewall delete rule name=&quot;Camera Server Echo&quot;" 
+                  Return="ignore" />
+
+    <CustomAction Id="RemoveICMPRule" 
+                  Execute="deferred" 
+                  Impersonate="no" 
+                  ExeCommand="netsh advfirewall firewall delete rule name=&quot;ICMP Allow incoming V4 echo request&quot;" 
+                  Return="ignore" />
+
+    <!-- Installation sequence -->
+    <InstallExecuteSequence>
+      <Custom Action="AddFirewallRules" After="InstallFiles">NOT Installed</Custom>
+      <Custom Action="AddICMPRule" After="AddFirewallRules">NOT Installed</Custom>
+      <Custom Action="RemoveFirewallRules" After="RemoveFiles">REMOVE="ALL"</Custom>
+      <Custom Action="RemoveICMPRule" After="RemoveFirewallRules">REMOVE="ALL"</Custom>
+    </InstallExecuteSequence>
+
+  </Product>
+</Wix>

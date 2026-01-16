@@ -1,0 +1,83 @@
+# Build directories
+build/
+debug/
+release/
+
+# Qt generated files
+*.pro.user
+*.pro.user.*
+*.qbs.user
+*.qbs.user.*
+*.moc
+*.o
+*.obj
+*.so
+*.dll
+*.exe
+*.pdb
+*.ilk
+*.exp
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+
+# Visual Studio
+.vs/
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.sln
+*.suo
+*.user
+
+# Qt Creator
+*.autosave
+*.creator
+*.creator.user
+*.includes
+*.files
+*.config
+
+# Logs and config files (keep examples)
+*.log
+config.json
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Lock files
+*.lock
+
+# Build setup and installer files
+installer/output/
+installer/*.wixobj
+installer/*.wixpdb
+installer/HarvestedFiles.wxs
+*.msi
+*.msm
+
+# WiX Toolset temporary files
+*.wixproj.user
+
+# Backup files
+*.backup
+*.bak
+*.tmp
+
+# WireGuard DLLs (these should be managed separately)
+tunnel.dll
+wireguard.dll
