@@ -30,7 +30,7 @@ struct WireGuardPeer {
     QString presharedKey;
     QString endpoint;
     QStringList allowedIPs;
-    uint16_t persistentKeepalive = 0;
+    uint16_t persistentKeepalive = 25;  // Default to 25 seconds to keep NAT firewall hole open (prevents "retry" issues)
     uint64_t rxBytes = 0;
     uint64_t txBytes = 0;
     QDateTime lastHandshake;
@@ -41,6 +41,7 @@ struct WireGuardInterface {
     QString privateKey;
     QString publicKey;
     uint16_t listenPort = 0;
+    uint16_t mtu = 1280;  // Default MTU to 1280 to prevent video packet fragmentation
     QStringList addresses;
     QStringList dns;
     QList<WireGuardPeer> peers;

@@ -343,6 +343,9 @@ QString WireGuardManager::configToString(const WireGuardConfig& config)
     if (config.interfaceConfig.listenPort > 0) {
         stream << "ListenPort = " << config.interfaceConfig.listenPort << Qt::endl;
     }
+    if (config.interfaceConfig.mtu > 0) {
+        stream << "MTU = " << config.interfaceConfig.mtu << Qt::endl;
+    }
     
     // Peer sections
     for (const WireGuardPeer& peer : config.interfaceConfig.peers) {
@@ -996,6 +999,11 @@ WireGuardConfig WireGuardManager::readConfigFile(const QString& filePath)
                 }
             } else if (key == "ListenPort") {
                 config.interfaceConfig.listenPort = value.toUInt();
+            } else if (key == "MTU") {
+                config.interfaceConfig.mtu = value.toUInt();
+                if (config.interfaceConfig.mtu == 0) {
+                    config.interfaceConfig.mtu = 1280;  // Default to 1280 if invalid
+                }
             }
         } else if (currentSection == "Peer") {
             if (key == "PublicKey") {

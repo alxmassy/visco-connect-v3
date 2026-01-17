@@ -350,6 +350,8 @@ void PortForwarder::handleNewConnection()
             this, &PortForwarder::handleClientDisconnected);
     connect(clientSocket, &QTcpSocket::readyRead, 
             this, &PortForwarder::handleClientDataReady);
+    connect(clientSocket, &QTcpSocket::bytesWritten,  // Non-blocking write buffer flushing
+            this, &PortForwarder::handleBytesWritten);
     connect(clientSocket, QOverload<QAbstractSocket::SocketError>::of(&QAbstractSocket::errorOccurred),
             this, &PortForwarder::handleConnectionError);
     
@@ -360,6 +362,8 @@ void PortForwarder::handleNewConnection()
             this, &PortForwarder::handleTargetDisconnected);
     connect(connInfo->targetSocket, &QTcpSocket::readyRead, 
             this, &PortForwarder::handleTargetDataReady);
+    connect(connInfo->targetSocket, &QTcpSocket::bytesWritten,  // Non-blocking write buffer flushing
+            this, &PortForwarder::handleBytesWritten);
     connect(connInfo->targetSocket, QOverload<QAbstractSocket::SocketError>::of(&QAbstractSocket::errorOccurred),
             this, &PortForwarder::handleConnectionError);
       // Attempt connection to target camera
@@ -744,22 +748,45 @@ void PortForwarder::forwardData(QTcpSocket* from, QTcpSocket* to, const QString&
     }
     
     // Write data with proper error handling for streaming
+    // OPTIMIZATION: Use non-blocking writes for real-time video streaming
+    // Previously used waitForBytesWritten(100) which could block for up to 100ms,
+    // causing video frames to be dropped (at 30fps, 100ms = 3 dropped frames)
+    
     qint64 totalWritten = 0;
     qint64 dataSize = data.size();
     
-    while (totalWritten < dataSize) {
-        qint64 bytesWritten = to->write(data.constData() + totalWritten, dataSize - totalWritten);
-        
-        if (bytesWritten == -1) {
-            LOG_ERROR(QString("Failed to write data %1 for camera %2: %3")
-                      .arg(direction).arg(cameraId).arg(to->errorString()), "PortForwarder");
-            return;
-        }
-          totalWritten += bytesWritten;
-        
-        // If we couldn't write all data at once, wait briefly
-        if (totalWritten < dataSize) {
-            to->waitForBytesWritten(100); // Wait up to 100ms
+    // Try to write all data without blocking
+    qint64 bytesWritten = to->write(data.constData(), dataSize);
+    
+    if (bytesWritten == -1) {
+        LOG_ERROR(QString("Failed to write data %1 for camera %2: %3")
+                  .arg(direction).arg(cameraId).arg(to->errorString()), "PortForwarder");
+        return;
+    }
+    
+    totalWritten = bytesWritten;
+    
+    // If we couldn't write all data at once, buffer the remaining data
+    // The OS will notify us via bytesWritten() signal when more buffer space is available
+    if (totalWritten < dataSize) {
+        // Find connection info to buffer remaining data
+        for (auto it = m_sessions[cameraId]->connections.begin(); 
+             it != m_sessions[cameraId]->connections.end(); ++it) {
+            ConnectionInfo* info = it.value();
+            if ((direction == "client->target" && info->clientSocket == from && info->targetSocket == to) ||
+                (direction == "target->client" && info->targetSocket == from && info->clientSocket == to)) {
+                
+                QByteArray* writeBuffer = (direction == "client->target") ? 
+                    &info->pendingClientWrite : &info->pendingTargetWrite;
+                
+                // Append remaining data to buffer
+                writeBuffer->append(data.constData() + totalWritten, dataSize - totalWritten);
+                
+                LOG_DEBUG(QString("Buffered %1 bytes (socket write buffer full) %2 for camera %3. Total buffered: %4")
+                          .arg(dataSize - totalWritten).arg(direction).arg(cameraId).arg(writeBuffer->size()), 
+                          "PortForwarder");
+                break;
+            }
         }
     }
     
@@ -1070,6 +1097,54 @@ void PortForwarder::optimizeSocketForStreaming(QTcpSocket* socket)
     LOG_DEBUG("Socket optimized for RTSP streaming with enhanced buffer sizes", "PortForwarder");
 }
 
+void PortForwarder::handleBytesWritten()
+{
+    // This slot is called when a socket is ready to accept more data
+    // We use it to flush any buffered write data for non-blocking I/O
+    
+    QTcpSocket* writableSocket = qobject_cast<QTcpSocket*>(sender());
+    if (!writableSocket) return;
+    
+    // Find which connection this socket belongs to
+    for (auto sessionIt = m_sessions.begin(); sessionIt != m_sessions.end(); ++sessionIt) {
+        ForwardingSession* session = sessionIt.value();
+        
+        for (auto connIt = session->connections.begin(); connIt != session->connections.end(); ++connIt) {
+            ConnectionInfo* info = connIt.value();
+            
+            // Check if this is a client or target socket
+            QByteArray* writeBuffer = nullptr;
+            QString direction;
+            
+            if (info->clientSocket == writableSocket && !info->pendingClientWrite.isEmpty()) {
+                writeBuffer = &info->pendingClientWrite;
+                direction = "client->target (buffered)";
+            } else if (info->targetSocket == writableSocket && !info->pendingTargetWrite.isEmpty()) {
+                writeBuffer = &info->pendingTargetWrite;
+                direction = "target->client (buffered)";
+            }
+            
+            if (writeBuffer && !writeBuffer->isEmpty()) {
+                // Try to write as much buffered data as possible
+                qint64 bytesWritten = writableSocket->write(writeBuffer->constData(), writeBuffer->size());
+                
+                if (bytesWritten > 0) {
+                    // Remove the written bytes from buffer
+                    writeBuffer->remove(0, bytesWritten);
+                    
+                    LOG_DEBUG(QString("Flushed %1 bytes %2 for camera %3. Buffer remaining: %4")
+                              .arg(bytesWritten).arg(direction).arg(sessionIt.key()).arg(writeBuffer->size()), 
+                              "PortForwarder");
+                } else if (bytesWritten < 0) {
+                    LOG_ERROR(QString("Failed to flush buffered data %1 for camera %2: %3")
+                              .arg(direction).arg(sessionIt.key()).arg(writableSocket->errorString()), 
+                              "PortForwarder");
+                }
+                // Continue checking other buffers for this socket
+            }
+        }
+    }
+}
 QString PortForwarder::getBindingInfo(const QString& cameraId) const
 {
     if (!m_sessions.contains(cameraId)) {

@@ -57,9 +57,12 @@ private slots:
     void handleTargetConnected();
     void handleTargetDisconnected();
     void handleTargetDataReady();
-    void handleConnectionError(QAbstractSocket::SocketError error);    void handleReconnectTimer();    void onNetworkInterfacesChanged();
+    void handleConnectionError(QAbstractSocket::SocketError error);    
+    void handleReconnectTimer();    
+    void onNetworkInterfacesChanged();
     void onWireGuardStateChanged(bool active);
     void handleHealthCheck();
+    void handleBytesWritten();  // Handle buffered data when socket is ready
 
 private:    struct ConnectionInfo {
         QTcpSocket* clientSocket;
@@ -69,6 +72,8 @@ private:    struct ConnectionInfo {
         QDateTime connectedTime;
         bool isTargetConnected;
         QByteArray pendingClientData;  // Buffer for data received before target connection
+        QByteArray pendingTargetWrite;  // Buffer for target->client writes (non-blocking)
+        QByteArray pendingClientWrite;  // Buffer for client->target writes (non-blocking)
     };
     
     struct ForwardingSession {

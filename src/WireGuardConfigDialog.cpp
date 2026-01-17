@@ -98,6 +98,7 @@ void WireGuardConfigDialog::setConfiguration(const WireGuardConfig& config)
     m_addressEdit->setText(config.interfaceConfig.addresses.join(", "));
     m_dnsEdit->setText(config.interfaceConfig.dns.join(", "));
     m_listenPortSpin->setValue(config.interfaceConfig.listenPort);
+    m_mtuSpin->setValue(config.interfaceConfig.mtu > 0 ? config.interfaceConfig.mtu : 1280);
       // Debug: Check what was actually set in the field
     qDebug() << "Public key field after setting:" << m_publicKeyEdit->text().left(16) + "..." << "Length:" << m_publicKeyEdit->text().length();
     
@@ -181,6 +182,7 @@ void WireGuardConfigDialog::generateKeypair()
             m_config.interfaceConfig.addresses = m_addressEdit->text().split(',');
             m_config.interfaceConfig.dns = m_dnsEdit->text().split(',');
             m_config.interfaceConfig.listenPort = m_listenPortSpin->value();
+            m_config.interfaceConfig.mtu = m_mtuSpin->value();
             
             // Clean up addresses and DNS
             for (QString& addr : m_config.interfaceConfig.addresses) {
@@ -275,6 +277,7 @@ void WireGuardConfigDialog::saveToFile()
     m_config.interfaceConfig.addresses = m_addressEdit->text().split(',');
     m_config.interfaceConfig.dns = m_dnsEdit->text().split(',');
     m_config.interfaceConfig.listenPort = m_listenPortSpin->value();
+    m_config.interfaceConfig.mtu = m_mtuSpin->value();
     
     // Update peer configuration
     WireGuardPeer peer;
@@ -332,6 +335,7 @@ void WireGuardConfigDialog::validateAndAccept()
     m_config.interfaceConfig.addresses = m_addressEdit->text().split(',');
     m_config.interfaceConfig.dns = m_dnsEdit->text().split(',');
     m_config.interfaceConfig.listenPort = m_listenPortSpin->value();
+    m_config.interfaceConfig.mtu = m_mtuSpin->value();
     
     // Clean up addresses and DNS
     for (QString& addr : m_config.interfaceConfig.addresses) {
@@ -384,6 +388,12 @@ void WireGuardConfigDialog::resetToDefaults()
     m_config.interfaceConfig.name = "wg0";
     m_config.interfaceConfig.addresses = QStringList() << "10.0.0.2/24";
     m_config.interfaceConfig.dns = QStringList(); // Empty DNS servers by default
+    
+    // Create default peer with PersistentKeepalive enabled
+    WireGuardPeer defaultPeer;
+    defaultPeer.persistentKeepalive = 25;  // Enabled by default to keep NAT hole open
+    m_config.interfaceConfig.peers.clear();
+    m_config.interfaceConfig.peers.append(defaultPeer);
     
     setConfiguration(m_config);
 }
@@ -504,7 +514,14 @@ void WireGuardConfigDialog::setupUI()
     m_listenPortSpin->setSpecialValueText("Auto");
     m_listenPortSpin->setValue(0); // Auto by default
     networkForm->addRow("Listen Port:", m_listenPortSpin);
-      // Simple Peer Configuration Group
+    
+    m_mtuSpin = new QSpinBox;
+    m_mtuSpin->setRange(1280, 65535);
+    m_mtuSpin->setValue(1280);  // Default to 1280 to prevent video packet fragmentation
+    m_mtuSpin->setToolTip("MTU size in bytes (default: 1280 for video over VPN). Smaller values prevent packet fragmentation.");
+    networkForm->addRow("MTU Size:", m_mtuSpin);
+    
+    // Simple Peer Configuration Group
     QGroupBox* peerGroup = new QGroupBox("Peer Configuration");
     QFormLayout* peerForm = new QFormLayout(peerGroup);
     peerForm->setVerticalSpacing(10);
@@ -531,6 +548,7 @@ void WireGuardConfigDialog::setupUI()
     m_peerKeepaliveSpin->setSpecialValueText("Disabled");
     m_peerKeepaliveSpin->setSuffix(" seconds");
     m_peerKeepaliveSpin->setValue(25); // Set reasonable default
+    m_peerKeepaliveSpin->setToolTip("Keepalive interval to prevent NAT timeout (default: 25 seconds). Sends heartbeat packets every N seconds to keep the tunnel alive through routers. Set to 0 to disable.");
     peerForm->addRow("Keep Alive:", m_peerKeepaliveSpin);
     
     // Add all groups to form layout
