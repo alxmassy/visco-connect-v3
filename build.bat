@@ -228,31 +228,57 @@ if %errorlevel% equ 0 (
 )
 
 REM Check for Visual Studio 2022
-if exist "%ProgramFiles%\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" (
-    call "%ProgramFiles%\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" x64 >nul 2>&1
-    set "COMPILER_TYPE=MSVC2022"
-    set "CMAKE_GENERATOR=Visual Studio 17 2022"
-    set "COMPILER_FOUND=1"
-    echo   [OK] Using Visual Studio 2022
-    goto :compiler_found
+for %%V in (Community Professional Enterprise) do (
+    if exist "%ProgramFiles%\Microsoft Visual Studio\2022\%%V\VC\Auxiliary\Build\vcvarsall.bat" (
+        call "%ProgramFiles%\Microsoft Visual Studio\2022\%%V\VC\Auxiliary\Build\vcvarsall.bat" x64 >nul 2>&1
+        set "COMPILER_TYPE=MSVC2022"
+        set "CMAKE_GENERATOR=Visual Studio 17 2022"
+        set "COMPILER_FOUND=1"
+        echo   [OK] Using Visual Studio 2022 %%V
+        goto :compiler_found
+    )
 )
 
 REM Check for Visual Studio 2019
-if exist "%ProgramFiles(x86)%\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvarsall.bat" (
-    call "%ProgramFiles(x86)%\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvarsall.bat" x64 >nul 2>&1
-    set "COMPILER_TYPE=MSVC2019"
-    set "CMAKE_GENERATOR=Visual Studio 16 2019"
+for %%V in (Community Professional Enterprise) do (
+    if exist "%ProgramFiles(x86)%\Microsoft Visual Studio\2019\%%V\VC\Auxiliary\Build\vcvarsall.bat" (
+        call "%ProgramFiles(x86)%\Microsoft Visual Studio\2019\%%V\VC\Auxiliary\Build\vcvarsall.bat" x64 >nul 2>&1
+        set "COMPILER_TYPE=MSVC2019"
+        set "CMAKE_GENERATOR=Visual Studio 16 2019"
+        set "COMPILER_FOUND=1"
+        echo   [OK] Using Visual Studio 2019 %%V
+        goto :compiler_found
+    )
+)
+
+REM Check for Visual Studio 2017 (fallback)
+if exist "%ProgramFiles(x86)%\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvarsall.bat" (
+    call "%ProgramFiles(x86)%\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvarsall.bat" x64 >nul 2>&1
+    set "COMPILER_TYPE=MSVC2017"
+    set "CMAKE_GENERATOR=Visual Studio 15 2017"
     set "COMPILER_FOUND=1"
-    echo   [OK] Using Visual Studio 2019
+    echo   [OK] Using Visual Studio 2017
     goto :compiler_found
 )
 
 :compiler_not_found
 echo   [ERROR] No suitable compiler found!
-echo   Please install one of the following:
-echo   1. Visual Studio 2019/2022 Community Edition
-echo   2. MinGW-w64 (usually comes with Qt installation)
-echo   3. Qt Creator with MinGW
+echo.
+echo   To fix this, please install one of the following:
+echo   1. Visual Studio 2022 Community Edition:
+echo      https://visualstudio.microsoft.com/vs/
+echo      - Choose "Desktop development with C++" workload during installation
+echo.
+echo   2. Visual Studio 2019 Community Edition:
+echo      https://visualstudio.microsoft.com/vs/older-downloads/
+echo      - Choose "Desktop development with C++" workload during installation
+echo.
+echo   3. Or install MinGW-w64 (usually comes with Qt installation):
+echo      - Install through Qt Online Installer
+echo      - Select MinGW option during Qt setup
+echo.
+echo   After installation, close and reopen this command prompt for changes to take effect.
+echo.
 pause
 exit /b 1
 

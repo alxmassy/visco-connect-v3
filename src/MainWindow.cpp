@@ -1112,7 +1112,7 @@ MainWindow::MainWindow(QWidget *parent)
     
     // Setup system tray connections
     LOG_INFO("Setting up system tray connections...", "MainWindow");
-    connect(m_trayManager, &SystemTrayManager::showMainWindow, [this]() {
+    connect(m_trayManager, &SystemTrayManager::showMainWindow, this, [this]() {
         show();
         raise();
         activateWindow();
@@ -1126,12 +1126,16 @@ MainWindow::MainWindow(QWidget *parent)
         if (m_vpnWidget) {
             m_vpnWidget->disconnectFromNetwork();
         }
-    });    connect(m_trayManager, &SystemTrayManager::quitApplication, [this]() {
+    });
+    connect(m_trayManager, &SystemTrayManager::quitApplication, this, [this]() {
         m_forceQuit = true;
         close();
         qApp->quit();
-    });      // Connect network status changes to system tray updates
-    LOG_INFO("Connecting network status monitoring...", "MainWindow");    connect(m_vpnWidget, &VpnWidget::statusChanged, this, [this](const QString& status) {
+    });
+    
+    // Connect network status changes to system tray updates
+    LOG_INFO("Connecting network status monitoring...", "MainWindow");
+    connect(m_vpnWidget, &VpnWidget::statusChanged, this, [this](const QString& status) {
         if (m_trayManager) {
             m_trayManager->updateVpnStatus();
             
@@ -1143,6 +1147,7 @@ MainWindow::MainWindow(QWidget *parent)
             }
         }
     });
+
     
     // Initial network status update for system tray
     LOG_INFO("Performing initial network status update...", "MainWindow");
@@ -1201,6 +1206,109 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
+    // Critical: Block ALL signals immediately to prevent any signal emission during destruction
+    blockSignals(true);
+    
+    // Disconnect all signals before doing anything else
+    disconnect();
+    
+    // Block signals on all child components to prevent cascading signals
+    if (m_statisticsRefreshTimer) {
+        m_statisticsRefreshTimer->blockSignals(true);
+        m_statisticsRefreshTimer->stop();
+    }
+    
+    if (m_cameraManager) {
+        m_cameraManager->blockSignals(true);
+    }
+    
+    if (m_networkManager) {
+        m_networkManager->blockSignals(true);
+    }
+    
+    if (m_echoServer) {
+        m_echoServer->blockSignals(true);
+    }
+    
+    if (m_pingResponder) {
+        m_pingResponder->blockSignals(true);
+    }
+    
+    if (m_vpnWidget) {
+        m_vpnWidget->blockSignals(true);
+    }
+    
+    if (m_userProfileWidget) {
+        m_userProfileWidget->blockSignals(true);
+    }
+    
+    if (m_trayManager) {
+        m_trayManager->blockSignals(true);
+    }
+    
+    if (m_previewWidget) {
+        m_previewWidget->blockSignals(true);
+    }
+    
+    // Now safely clean up resources without worrying about signals
+    if (m_pingProcess) {
+        if (m_pingProcess->state() != QProcess::NotRunning) {
+            m_pingProcess->kill();
+            m_pingProcess->waitForFinished(500);
+        }
+        delete m_pingProcess;
+        m_pingProcess = nullptr;
+    }
+    
+    if (m_cameraManager) {
+        m_cameraManager->stopAllCameras();
+        delete m_cameraManager;
+        m_cameraManager = nullptr;
+    }
+    
+    if (m_networkManager) {
+        m_networkManager->stopMonitoring();
+        delete m_networkManager;
+        m_networkManager = nullptr;
+    }
+    
+    if (m_echoServer) {
+        m_echoServer->stopServer();
+        delete m_echoServer;
+        m_echoServer = nullptr;
+    }
+    
+    if (m_pingResponder) {
+        m_pingResponder->stopResponder();
+        delete m_pingResponder;
+        m_pingResponder = nullptr;
+    }
+    
+    // Close preview windows
+    for (QWidget* window : m_previewWindows) {
+        window->close();
+        window->deleteLater();
+    }
+    m_previewWindows.clear();
+    
+    // Clean up VPN widget
+    if (m_vpnWidget) {
+        delete m_vpnWidget;
+        m_vpnWidget = nullptr;
+    }
+    
+    if (m_userProfileWidget) {
+        delete m_userProfileWidget;
+        m_userProfileWidget = nullptr;
+    }
+    
+    // Hide and clean tray
+    if (m_trayManager) {
+        m_trayManager->hide();
+        delete m_trayManager;
+        m_trayManager = nullptr;
+    }
+    
     saveSettings();
 }
 
@@ -1230,7 +1338,8 @@ void MainWindow::appendLog(const QString& message)
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {    // If the system tray is available and we're not forcing quit, close to tray
-    if (m_trayManager && m_trayManager->isVisible() && !m_forceQuit) {        hide();
+    if (m_trayManager && m_trayManager->isVisible() && !m_forceQuit) {
+        hide();
         if (m_trayManager) {
             m_trayManager->showNotification("Visco Connect", 
                 "Application closed to system tray. Right-click the tray icon for options.");
@@ -1240,16 +1349,65 @@ void MainWindow::closeEvent(QCloseEvent *event)
     }
     
     // If we're force quitting or tray is not available, actually close
-    saveSettings();
-    
-    // Shutdown camera manager
-    if (m_cameraManager) {
-        m_cameraManager->shutdown();
-    }
-    
-    // Hide tray icon before quitting
-    if (m_trayManager) {
-        m_trayManager->hide();
+    try {
+        // Block signals on this window immediately
+        blockSignals(true);
+        
+        // Stop the statistics refresh timer first
+        if (m_statisticsRefreshTimer) {
+            m_statisticsRefreshTimer->stop();
+            m_statisticsRefreshTimer->blockSignals(true);
+        }
+        
+        saveSettings();
+        
+        // Disconnect everything before shutdown
+        disconnect();
+        
+        // Block signals on all components
+        if (m_cameraManager) {
+            m_cameraManager->blockSignals(true);
+            m_cameraManager->disconnect();
+            m_cameraManager->stopAllCameras();
+            m_cameraManager->shutdown();
+        }
+        
+        // Stop network monitoring
+        if (m_networkManager) {
+            m_networkManager->blockSignals(true);
+            m_networkManager->disconnect();
+            m_networkManager->stopMonitoring();
+        }
+        
+        // Stop echo server
+        if (m_echoServer) {
+            m_echoServer->blockSignals(true);
+            m_echoServer->disconnect();
+            m_echoServer->stopServer();
+        }
+        
+        // Stop ping responder
+        if (m_pingResponder) {
+            m_pingResponder->blockSignals(true);
+            m_pingResponder->disconnect();
+            m_pingResponder->stopResponder();
+        }
+        
+        // Stop any running ping process
+        if (m_pingProcess) {
+            m_pingProcess->kill();
+            m_pingProcess->waitForFinished(500);
+        }
+        
+        // Hide tray icon before quitting
+        if (m_trayManager) {
+            m_trayManager->blockSignals(true);
+            m_trayManager->disconnect();
+            m_trayManager->hide();
+        }
+    } catch (...) {
+        // Silently ignore any exceptions during shutdown
+        LOG_ERROR("Exception during window close event", "MainWindow");
     }
     
     event->accept();
@@ -2021,7 +2179,7 @@ void MainWindow::setupConnections()
     
     // VPN Widget
     connect(m_vpnWidget, &VpnWidget::statusChanged,
-            [this](const QString& status) {
+            this, [this](const QString& status) {
                 showMessage(QString("VPN Status: %1").arg(status));
             });
     connect(m_vpnWidget, &VpnWidget::logMessage,

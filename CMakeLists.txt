@@ -4,6 +4,38 @@ project(ViscoConnect VERSION 2.1.5 LANGUAGES CXX RC)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Windows-specific definitions to prevent WinSock conflicts
+if(WIN32)
+    # Set Windows SDK to use x64 libraries (not x86)
+    if(NOT DEFINED CMAKE_VS_PLATFORM_NAME)
+        set(CMAKE_VS_PLATFORM_NAME x64)
+    endif()
+    
+    # Force 64-bit library paths for Windows SDK (UM libs)
+    set(WINDOWS_SDK_PATH "C:/Program Files (x86)/Windows Kits/10/lib/10.0.26100.0/um/x64")
+    if(EXISTS "${WINDOWS_SDK_PATH}")
+        link_directories("${WINDOWS_SDK_PATH}")
+    endif()
+    
+    # Force 64-bit UCRT (Universal C Runtime) library path
+    set(WINDOWS_UCRT_PATH "C:/Program Files (x86)/Windows Kits/10/lib/10.0.26100.0/ucrt/x64")
+    if(EXISTS "${WINDOWS_UCRT_PATH}")
+        link_directories("${WINDOWS_UCRT_PATH}")
+    endif()
+    
+    # Force 64-bit MSVC runtime libs
+    set(MSVC_RUNTIME_LIB_PATH "C:/Program Files (x86)/Microsoft Visual Studio/18/BuildTools/VC/Tools/MSVC/14.50.35717/lib/x64")
+    if(EXISTS "${MSVC_RUNTIME_LIB_PATH}")
+        link_directories("${MSVC_RUNTIME_LIB_PATH}")
+    endif()
+    
+    add_compile_definitions(
+        WIN32_LEAN_AND_MEAN  # Exclude rarely-used Windows headers (including old winsock.h)
+        NOMINMAX             # Prevent Windows.h from defining min/max macros
+        _WIN32_WINNT=0x0601  # Target Windows 7+ for modern APIs
+    )
+endif()
+
 # --- Find Qt6 package (modified for MinGW) ---
 
 # This makes CMake automatically handle MOC, UIC, and RCC
@@ -23,7 +55,7 @@ find_package(Qt6 COMPONENTS Core Widgets Network Multimedia MultimediaWidgets QU
 if(NOT Qt6_FOUND)
     message(STATUS "Qt6 not found automatically. Searching common MinGW directories...")
 
-    # List of potential installation paths for MinGW versions of Qt6
+    # List of potential installation paths for MinGW/MSVC versions of Qt6
     # You can add your specific path here if it's not listed.
     set(QT6_MINGW_SEARCH_PATHS
         "C:/Qt/6.8.0/mingw_64"
@@ -31,6 +63,11 @@ if(NOT Qt6_FOUND)
         "C:/Qt/6.6.0/mingw_64"
         "C:/Qt/6.5.3/mingw_64"
         "C:/Qt/6.5.0/mingw_64"
+        "C:/Qt/6.8.0/msvc2019_64"
+        "C:/Qt/6.7.0/msvc2019_64"
+        "C:/Qt/6.6.0/msvc2019_64"
+        "C:/Qt/6.5.3/msvc2019_64"
+        "C:/Qt/6.5.0/msvc2019_64"
         "C:/Qt6"
     )
 
@@ -136,7 +173,12 @@ target_link_libraries(ViscoConnect PRIVATE Qt6::Core Qt6::Widgets Qt6::Network Q
 
 # Link Windows system libraries for WireGuard integration
 if(WIN32)
-    target_link_libraries(ViscoConnect PRIVATE advapi32 ws2_32)
+    # Link to all required Windows libraries
+    target_link_libraries(ViscoConnect PRIVATE 
+        advapi32 ws2_32 kernel32 user32 gdi32 shell32
+        ole32 oleaut32 uuid comdlg32
+        iphlpapi mpr userenv d3d11 dxgi dxguid winspool
+    )
 endif()
 
 # Copy Qt6 DLLs to the output directory using windeployqt (Corrected Version)
