@@ -227,8 +227,63 @@ if %errorlevel% equ 0 (
     goto :compiler_found
 )
 
-REM Check for Visual Studio 2022
-for %%V in (Community Professional Enterprise) do (
+REM Check for cl.exe in PATH (If user already set up environment)
+where cl.exe >nul 2>&1
+if %errorlevel% equ 0 (
+    set "COMPILER_TYPE=MSVC (System PATH)"
+    set "CMAKE_GENERATOR=Visual Studio 17 2022"
+    set "COMPILER_FOUND=1"
+    echo   [OK] Found cl.exe in PATH. Assuming environment is ready.
+    goto :compiler_found
+)
+
+REM Check for Visual Studio "18" (Preview/Newer Build Tools)
+if exist "%ProgramFiles(x86)%\Microsoft Visual Studio\18\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" (
+    call "%ProgramFiles(x86)%\Microsoft Visual Studio\18\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64 >nul 2>&1
+    set "COMPILER_TYPE=MSVC (VS18 BuildTools)"
+    set "CMAKE_GENERATOR=Visual Studio 17 2022"
+    set "VS_INSTALL_PATH=%ProgramFiles(x86)%\Microsoft Visual Studio\18\BuildTools"
+    set "COMPILER_FOUND=1"
+    echo   [OK] Using Visual Studio 18 BuildTools
+    goto :compiler_found
+)
+
+REM Check using vswhere (Recommended method)
+set "VSWHERE_PATH=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
+echo   [INFO] Checking for vswhere at: "%VSWHERE_PATH%"
+if exist "%VSWHERE_PATH%" (
+    echo   [INFO] vswhere found. Querying for Visual Studio...
+    
+    REM Debug: Show raw output
+    "%VSWHERE_PATH%" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath > vswhere_output.txt
+    set /p VSWHERE_DEBUG=<vswhere_output.txt
+    echo   [INFO] vswhere output: !VSWHERE_DEBUG!
+    del vswhere_output.txt
+    
+    for /f "usebackq tokens=*" %%i in (`"%VSWHERE_PATH%" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do (
+        set "VS_INSTALL_PATH=%%i"
+    )
+    if defined VS_INSTALL_PATH (
+        echo   [INFO] vswhere returned path: "!VS_INSTALL_PATH!"
+        if exist "!VS_INSTALL_PATH!\VC\Auxiliary\Build\vcvarsall.bat" (
+             call "!VS_INSTALL_PATH!\VC\Auxiliary\Build\vcvarsall.bat" x64 >nul 2>&1
+             set "COMPILER_TYPE=MSVC (Detected)"
+             set "CMAKE_GENERATOR=Visual Studio 17 2022"
+             set "COMPILER_FOUND=1"
+             echo   [OK] Found Visual Studio via vswhere at: !VS_INSTALL_PATH!
+             goto :compiler_found
+        ) else (
+             echo   [WARNING] vcvarsall.bat not found at: "!VS_INSTALL_PATH!\VC\Auxiliary\Build\vcvarsall.bat"
+        )
+    ) else (
+        echo   [WARNING] vswhere returned no path (Visual Studio with C++ tools might not be installed correctly)
+    )
+) else (
+    echo   [WARNING] vswhere.exe not found.
+)
+
+REM Check for Visual Studio 2022 (Fallback)
+for %%V in (Community Professional Enterprise BuildTools) do (
     if exist "%ProgramFiles%\Microsoft Visual Studio\2022\%%V\VC\Auxiliary\Build\vcvarsall.bat" (
         call "%ProgramFiles%\Microsoft Visual Studio\2022\%%V\VC\Auxiliary\Build\vcvarsall.bat" x64 >nul 2>&1
         set "COMPILER_TYPE=MSVC2022"
@@ -237,10 +292,18 @@ for %%V in (Community Professional Enterprise) do (
         echo   [OK] Using Visual Studio 2022 %%V
         goto :compiler_found
     )
+    if exist "%ProgramFiles(x86)%\Microsoft Visual Studio\2022\%%V\VC\Auxiliary\Build\vcvarsall.bat" (
+        call "%ProgramFiles(x86)%\Microsoft Visual Studio\2022\%%V\VC\Auxiliary\Build\vcvarsall.bat" x64 >nul 2>&1
+        set "COMPILER_TYPE=MSVC2022"
+        set "CMAKE_GENERATOR=Visual Studio 17 2022"
+        set "COMPILER_FOUND=1"
+        echo   [OK] Using Visual Studio 2022 %%V
+        goto :compiler_found
+    )
 )
 
-REM Check for Visual Studio 2019
-for %%V in (Community Professional Enterprise) do (
+REM Check for Visual Studio 2019 (Fallback)
+for %%V in (Community Professional Enterprise BuildTools) do (
     if exist "%ProgramFiles(x86)%\Microsoft Visual Studio\2019\%%V\VC\Auxiliary\Build\vcvarsall.bat" (
         call "%ProgramFiles(x86)%\Microsoft Visual Studio\2019\%%V\VC\Auxiliary\Build\vcvarsall.bat" x64 >nul 2>&1
         set "COMPILER_TYPE=MSVC2019"
@@ -251,7 +314,7 @@ for %%V in (Community Professional Enterprise) do (
     )
 )
 
-REM Check for Visual Studio 2017 (fallback)
+REM Check for Visual Studio 2017 (Fallback)
 if exist "%ProgramFiles(x86)%\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvarsall.bat" (
     call "%ProgramFiles(x86)%\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvarsall.bat" x64 >nul 2>&1
     set "COMPILER_TYPE=MSVC2017"
@@ -348,6 +411,11 @@ cd build
 REM Configure with CMake
 echo   [INFO] Running CMake configuration for %BUILD_TYPE% build...
 set "CMAKE_ARGS=-DCMAKE_BUILD_TYPE=%BUILD_TYPE% -DCMAKE_PREFIX_PATH=%CMAKE_PREFIX_PATH%"
+
+REM Add generator instance if we found a path (helps CMake find VS in non-standard locations)
+if defined VS_INSTALL_PATH (
+    set "CMAKE_ARGS=!CMAKE_ARGS! -DCMAKE_GENERATOR_INSTANCE=\"!VS_INSTALL_PATH!\""
+)
 
 if "%COMPILER_TYPE%"=="MinGW" (
     cmake .. -G "%CMAKE_GENERATOR%" %CMAKE_ARGS%

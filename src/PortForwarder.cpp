@@ -366,12 +366,27 @@ void PortForwarder::handleNewConnection()
             this, &PortForwarder::handleBytesWritten);
     connect(connInfo->targetSocket, QOverload<QAbstractSocket::SocketError>::of(&QAbstractSocket::errorOccurred),
             this, &PortForwarder::handleConnectionError);
-      // Attempt connection to target camera
+    // Attempt connection to target camera
     LOG_DEBUG(QString("Connecting to target camera %1:%2 for client %3")
               .arg(session->camera.ipAddress())
               .arg(session->camera.port())
               .arg(clientAddress), "PortForwarder");
-      // Set connection timeout for RTSP (extended timeout for better reliability)
+    
+    // Explicitly bind to the correct local interface to prevent Source IP routing issues
+    if (m_networkManager) {
+        QHostAddress cameraIp(session->camera.ipAddress());
+        QHostAddress bindAddress = m_networkManager->getBestLocalAddress(cameraIp);
+        
+        if (!bindAddress.isNull() && bindAddress != QHostAddress::Any) {
+            if (connInfo->targetSocket->bind(bindAddress)) {
+                LOG_INFO(QString("Bound outgoing connection to local interface: %1").arg(bindAddress.toString()), "PortForwarder");
+            } else {
+                LOG_WARNING(QString("Failed to bind to local interface %1: %2").arg(bindAddress.toString()).arg(connInfo->targetSocket->errorString()), "PortForwarder");
+            }
+        }
+    }
+
+    // Set connection timeout for RTSP (extended timeout for better reliability)
     connInfo->targetSocket->connectToHost(session->camera.ipAddress(), session->camera.port());
     
     // Set connection timeout to 30 seconds for RTSP cameras
@@ -400,8 +415,13 @@ void PortForwarder::handleClientDisconnected()
 {
     QTcpSocket* clientSocket = qobject_cast<QTcpSocket*>(sender());
     if (!clientSocket) {
-        LOG_ERROR("handleClientDisconnected called with invalid socket", "PortForwarder");
+        // Socket may have been deleted by health check timer
         return;
+    }
+
+    // Check if we already cleaned this up in a health check
+    if (!m_socketToCameraMap.contains(clientSocket)) {
+        return; 
     }
     
     QString cameraId = m_socketToCameraMap.value(clientSocket);
@@ -995,7 +1015,12 @@ void PortForwarder::logConnectionDetails(const QString& cameraId, const Connecti
 
 void PortForwarder::cleanupConnection(const QString& cameraId, QTcpSocket* clientSocket)
 {
-    if (!m_sessions.contains(cameraId) || !clientSocket) {
+    if (!clientSocket) return;
+    
+    // Disconnect signals to prevent race condition with handleClientDisconnected
+    clientSocket->disconnect(this);
+
+    if (!m_sessions.contains(cameraId)) {
         return;
     }
     
@@ -1006,6 +1031,8 @@ void PortForwarder::cleanupConnection(const QString& cameraId, QTcpSocket* clien
         logConnectionDetails(cameraId, connInfo, "Cleanup");
         
         if (connInfo->targetSocket) {
+            // Also disconnect target socket signals
+            connInfo->targetSocket->disconnect(this);
             m_socketToCameraMap.remove(connInfo->targetSocket);
             connInfo->targetSocket->deleteLater();
         }
@@ -1071,6 +1098,8 @@ void PortForwarder::handleHealthCheck()
     }
     
     for (QTcpSocket* socket : toRemove) {
+        // CRITICAL: Disconnect signals before deleting to prevent double-cleanup
+        socket->disconnect();
         cleanupConnection(cameraId, socket);
     }
 }

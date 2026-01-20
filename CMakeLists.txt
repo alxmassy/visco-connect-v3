@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(ViscoConnect VERSION 2.1.5 LANGUAGES CXX RC)
+project(ViscoConnect VERSION 3.1.5 LANGUAGES CXX RC)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -167,6 +167,9 @@ include_directories(include)
 
 # Create executable (WIN32 suppresses console window)
 add_executable(ViscoConnect WIN32 ${SOURCES} ${HEADERS} ${RESOURCES} ${WIN32_RESOURCES})
+
+# Set the manifest file for Visual Studio generator
+set_property(TARGET ViscoConnect PROPERTY VS_USER_MANIFEST "${CMAKE_CURRENT_SOURCE_DIR}/resources/app.manifest")
 
 # Link Qt6 libraries
 target_link_libraries(ViscoConnect PRIVATE Qt6::Core Qt6::Widgets Qt6::Network Qt6::Multimedia Qt6::MultimediaWidgets)

@@ -30,6 +30,7 @@ public:
     QList<QHostAddress> getAllAddresses() const;
     QList<QHostAddress> getWireGuardAddresses() const;
     QHostAddress getWireGuardAddress() const;
+    QHostAddress getBestLocalAddress(const QHostAddress& destAddress) const;
     
     // Interface status
     bool isWireGuardActive() const;
