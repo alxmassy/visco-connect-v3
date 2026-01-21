@@ -65,7 +65,7 @@ void CameraPreviewWidget::setupUI()
     m_mainLayout->setSpacing(5);
 
     // Video display group
-    m_videoGroupBox = new QGroupBox("Camera Preview");
+    m_videoGroupBox = new QGroupBox();
     m_videoLayout = new QVBoxLayout(m_videoGroupBox);
     
     // Camera info label
@@ -205,7 +205,7 @@ void CameraPreviewWidget::setCamera(const CameraConfig& camera)
                          .arg(camera.name(), camera.ipAddress())
                          .arg(camera.port());
     m_cameraInfoLabel->setText(cameraInfo);
-    m_videoGroupBox->setTitle(QString("Camera Preview - %1").arg(camera.name()));
+    // m_videoGroupBox->setTitle(QString("Camera Preview - %1").arg(camera.name()));
     m_videoLabel->setText("");
     
     // Enable controls
@@ -226,7 +226,7 @@ void CameraPreviewWidget::clearCamera()
     m_lastFrameImage = QImage();
     
     m_cameraInfoLabel->setText("No camera selected");
-    m_videoGroupBox->setTitle("Camera Preview");
+    m_videoGroupBox->setTitle("");
     m_videoLabel->setPixmap(QPixmap());
     
     // Disable controls
@@ -435,7 +435,7 @@ void CameraPreviewWidget::setCompactMode(bool compact)
         m_videoLabel->setMinimumSize(240, 180);
         m_videoLabel->setMaximumHeight(280);
         m_cameraInfoLabel->setVisible(true);
-        m_videoGroupBox->setTitle(QString("Camera Preview - %1").arg(m_camera.name()));
+        m_videoGroupBox->setTitle("");
     }
 }
 

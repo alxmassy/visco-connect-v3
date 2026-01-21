@@ -352,6 +352,42 @@ void VpnWidget::onConnectClicked()
     m_connectButton->setText("Joining Network...");
     m_connectButton->setEnabled(false);
     
+    // Automatically enforce optimal settings before connecting
+    // This ensures consistency even if the config file or server sent sub-optimal values
+    WireGuardConfig config = m_wireGuardManager->parseConfigFile(m_loadedConfigPath);
+    bool optimizationNeeded = false;
+    
+    // Enforce MTU 1280 (prevents fragmentation)
+    if (config.interfaceConfig.mtu != 1280) {
+        config.interfaceConfig.mtu = 1280;
+        optimizationNeeded = true;
+    }
+    
+    // Enforce PersistentKeepalive 25 (prevents NAT timeout)
+    for (WireGuardPeer& peer : config.interfaceConfig.peers) {
+        if (peer.persistentKeepalive != 25) {
+            peer.persistentKeepalive = 25;
+            optimizationNeeded = true;
+        }
+    }
+    
+    // Check for empty/missing peers and fix defaults if needed
+    if (config.interfaceConfig.peers.isEmpty()) {
+       WireGuardPeer defaultPeer;
+       defaultPeer.persistentKeepalive = 25;
+       config.interfaceConfig.peers.append(defaultPeer);
+       optimizationNeeded = true;
+    }
+    
+    // Save optimized config if changes were made
+    if (optimizationNeeded) {
+        // Fix: Use saveWireGuardConfig to ensure we write to the correct file path (wireguard_server.conf in AppData)
+        // m_wireGuardManager->saveConfig() writes to a subdirectory which causes a mismatch
+        QString configContent = m_wireGuardManager->configToString(config);
+        saveWireGuardConfig(configContent);
+        emit logMessage("Optimized WireGuard configuration: Enforced MTU 1280 and Keepalive 25");
+    }
+    
     // Pass the full path to use custom config files
     if (!m_wireGuardManager->connectTunnel(m_loadedConfigPath)) {
         QMessageBox::critical(this, tr("Visco Connect - Connection Error"), tr("Failed to connect using the configuration: %1").arg(m_loadedConfigPath));

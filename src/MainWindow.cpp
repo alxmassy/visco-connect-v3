@@ -1112,7 +1112,7 @@ MainWindow::MainWindow(QWidget *parent)
     
     // Setup system tray connections
     LOG_INFO("Setting up system tray connections...", "MainWindow");
-    connect(m_trayManager, &SystemTrayManager::showMainWindow, [this]() {
+    connect(m_trayManager, &SystemTrayManager::showMainWindow, this, [this]() {
         show();
         raise();
         activateWindow();
@@ -1126,12 +1126,16 @@ MainWindow::MainWindow(QWidget *parent)
         if (m_vpnWidget) {
             m_vpnWidget->disconnectFromNetwork();
         }
-    });    connect(m_trayManager, &SystemTrayManager::quitApplication, [this]() {
+    });
+    connect(m_trayManager, &SystemTrayManager::quitApplication, this, [this]() {
         m_forceQuit = true;
         close();
         qApp->quit();
-    });      // Connect network status changes to system tray updates
-    LOG_INFO("Connecting network status monitoring...", "MainWindow");    connect(m_vpnWidget, &VpnWidget::statusChanged, this, [this](const QString& status) {
+    });
+    
+    // Connect network status changes to system tray updates
+    LOG_INFO("Connecting network status monitoring...", "MainWindow");
+    connect(m_vpnWidget, &VpnWidget::statusChanged, this, [this](const QString& status) {
         if (m_trayManager) {
             m_trayManager->updateVpnStatus();
             
@@ -1143,6 +1147,7 @@ MainWindow::MainWindow(QWidget *parent)
             }
         }
     });
+
     
     // Initial network status update for system tray
     LOG_INFO("Performing initial network status update...", "MainWindow");
@@ -1201,6 +1206,109 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
+    // Critical: Block ALL signals immediately to prevent any signal emission during destruction
+    blockSignals(true);
+    
+    // Disconnect all signals before doing anything else
+    disconnect();
+    
+    // Block signals on all child components to prevent cascading signals
+    if (m_statisticsRefreshTimer) {
+        m_statisticsRefreshTimer->blockSignals(true);
+        m_statisticsRefreshTimer->stop();
+    }
+    
+    if (m_cameraManager) {
+        m_cameraManager->blockSignals(true);
+    }
+    
+    if (m_networkManager) {
+        m_networkManager->blockSignals(true);
+    }
+    
+    if (m_echoServer) {
+        m_echoServer->blockSignals(true);
+    }
+    
+    if (m_pingResponder) {
+        m_pingResponder->blockSignals(true);
+    }
+    
+    if (m_vpnWidget) {
+        m_vpnWidget->blockSignals(true);
+    }
+    
+    if (m_userProfileWidget) {
+        m_userProfileWidget->blockSignals(true);
+    }
+    
+    if (m_trayManager) {
+        m_trayManager->blockSignals(true);
+    }
+    
+    if (m_previewWidget) {
+        m_previewWidget->blockSignals(true);
+    }
+    
+    // Now safely clean up resources without worrying about signals
+    if (m_pingProcess) {
+        if (m_pingProcess->state() != QProcess::NotRunning) {
+            m_pingProcess->kill();
+            m_pingProcess->waitForFinished(500);
+        }
+        delete m_pingProcess;
+        m_pingProcess = nullptr;
+    }
+    
+    if (m_cameraManager) {
+        m_cameraManager->stopAllCameras();
+        delete m_cameraManager;
+        m_cameraManager = nullptr;
+    }
+    
+    if (m_networkManager) {
+        m_networkManager->stopMonitoring();
+        delete m_networkManager;
+        m_networkManager = nullptr;
+    }
+    
+    if (m_echoServer) {
+        m_echoServer->stopServer();
+        delete m_echoServer;
+        m_echoServer = nullptr;
+    }
+    
+    if (m_pingResponder) {
+        m_pingResponder->stopResponder();
+        delete m_pingResponder;
+        m_pingResponder = nullptr;
+    }
+    
+    // Close preview windows
+    for (QWidget* window : m_previewWindows) {
+        window->close();
+        window->deleteLater();
+    }
+    m_previewWindows.clear();
+    
+    // Clean up VPN widget
+    if (m_vpnWidget) {
+        delete m_vpnWidget;
+        m_vpnWidget = nullptr;
+    }
+    
+    if (m_userProfileWidget) {
+        delete m_userProfileWidget;
+        m_userProfileWidget = nullptr;
+    }
+    
+    // Hide and clean tray
+    if (m_trayManager) {
+        m_trayManager->hide();
+        delete m_trayManager;
+        m_trayManager = nullptr;
+    }
+    
     saveSettings();
 }
 
@@ -1230,7 +1338,8 @@ void MainWindow::appendLog(const QString& message)
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {    // If the system tray is available and we're not forcing quit, close to tray
-    if (m_trayManager && m_trayManager->isVisible() && !m_forceQuit) {        hide();
+    if (m_trayManager && m_trayManager->isVisible() && !m_forceQuit) {
+        hide();
         if (m_trayManager) {
             m_trayManager->showNotification("Visco Connect", 
                 "Application closed to system tray. Right-click the tray icon for options.");
@@ -1240,16 +1349,65 @@ void MainWindow::closeEvent(QCloseEvent *event)
     }
     
     // If we're force quitting or tray is not available, actually close
-    saveSettings();
-    
-    // Shutdown camera manager
-    if (m_cameraManager) {
-        m_cameraManager->shutdown();
-    }
-    
-    // Hide tray icon before quitting
-    if (m_trayManager) {
-        m_trayManager->hide();
+    try {
+        // Block signals on this window immediately
+        blockSignals(true);
+        
+        // Stop the statistics refresh timer first
+        if (m_statisticsRefreshTimer) {
+            m_statisticsRefreshTimer->stop();
+            m_statisticsRefreshTimer->blockSignals(true);
+        }
+        
+        saveSettings();
+        
+        // Disconnect everything before shutdown
+        disconnect();
+        
+        // Block signals on all components
+        if (m_cameraManager) {
+            m_cameraManager->blockSignals(true);
+            m_cameraManager->disconnect();
+            m_cameraManager->stopAllCameras();
+            m_cameraManager->shutdown();
+        }
+        
+        // Stop network monitoring
+        if (m_networkManager) {
+            m_networkManager->blockSignals(true);
+            m_networkManager->disconnect();
+            m_networkManager->stopMonitoring();
+        }
+        
+        // Stop echo server
+        if (m_echoServer) {
+            m_echoServer->blockSignals(true);
+            m_echoServer->disconnect();
+            m_echoServer->stopServer();
+        }
+        
+        // Stop ping responder
+        if (m_pingResponder) {
+            m_pingResponder->blockSignals(true);
+            m_pingResponder->disconnect();
+            m_pingResponder->stopResponder();
+        }
+        
+        // Stop any running ping process
+        if (m_pingProcess) {
+            m_pingProcess->kill();
+            m_pingProcess->waitForFinished(500);
+        }
+        
+        // Hide tray icon before quitting
+        if (m_trayManager) {
+            m_trayManager->blockSignals(true);
+            m_trayManager->disconnect();
+            m_trayManager->hide();
+        }
+    } catch (...) {
+        // Silently ignore any exceptions during shutdown
+        LOG_ERROR("Exception during window close event", "MainWindow");
     }
     
     event->accept();
@@ -1264,6 +1422,16 @@ void MainWindow::changeEvent(QEvent *event)
 
 void MainWindow::addCamera()
 {
+    QMessageBox::information(this, "Camera Configuration Advice",
+        "Make sure the Camera and PC are on the same network.\n\n"
+        "To ensure smooth performance with ViscoConnect, please configure your camera via its web interface with these settings:\n\n"
+        "- Resolution: 1280x720 (720P)\n"
+        "- Bitrate: 1024 kbps\n"
+        "- Bitrate Control: CBR (Constant Bitrate)\n"
+        "- Frame Rate: 20-25 FPS\n"
+        "- I-Frame Interval: 2x FPS (e.g., 40-50)\n\n"
+        "Incorrect settings may cause lag or connection drops.");
+
     CameraConfigDialog dialog(CameraConfig(), this);
     if (dialog.exec() == QDialog::Accepted) {
         CameraConfig camera = dialog.getCamera();
@@ -1407,6 +1575,12 @@ void MainWindow::removeCamera()
                                    QMessageBox::Yes | QMessageBox::No);
     
     if (ret == QMessageBox::Yes) {
+        // Stop preview if this camera is currently being previewed
+        if (m_previewWidget->hasCamera() && m_previewWidget->getCamera().id() == cameraId) {
+            m_previewWidget->stop();
+            m_previewWidget->clearCamera();
+        }
+        
         if (m_cameraManager->removeCamera(cameraId)) {
             showMessage(QString("Camera '%1' removed successfully").arg(cameraName));
         } else {
@@ -1521,23 +1695,7 @@ void MainWindow::refreshConnectionStatistics()
         QString cameraId = idItem->data(Qt::UserRole).toString();
         bool isRunning = m_cameraManager->isCameraRunning(cameraId);
         
-        // Update connections count (column 8)
-        int connectionCount = 0;
-        if (isRunning) {
-            connectionCount = m_cameraManager->getPortForwarder()->getConnectionCount(cameraId);
-        }
-        
-        QTableWidgetItem* connectionsItem = m_cameraTable->item(i, 8);
-        if (connectionsItem) {
-            connectionsItem->setText(QString::number(connectionCount));
-            if (connectionCount > 0) {
-                connectionsItem->setBackground(QColor(144, 238, 144)); // Light green
-            } else {
-                connectionsItem->setBackground(QColor(255, 255, 255)); // White
-            }
-        }
-        
-        // Update data transferred (column 9)
+        // Update data transferred (column 8)
         QString dataTransferred = "0 B";
         if (isRunning) {
             qint64 bytes = m_cameraManager->getPortForwarder()->getBytesTransferred(cameraId);
@@ -1554,7 +1712,7 @@ void MainWindow::refreshConnectionStatistics()
             }
         }
         
-        QTableWidgetItem* dataItem = m_cameraTable->item(i, 9);
+        QTableWidgetItem* dataItem = m_cameraTable->item(i, 8);
         if (dataItem) {
             dataItem->setText(dataTransferred);
         }
@@ -1610,6 +1768,9 @@ void MainWindow::onWireGuardStateChanged(bool isActive)
     } else {
         statusBar()->showMessage("Network Disconnected", 5000);
     }
+    
+    // Refresh camera table to show new status
+    updateCameraTable();
 }
 
 void MainWindow::onEchoClientConnected(const QString& clientAddress)
@@ -1801,8 +1962,8 @@ void MainWindow::createCentralWidget()
     // Camera management group
     m_cameraGroupBox = new QGroupBox("Camera Configuration");
     QVBoxLayout* cameraLayout = new QVBoxLayout(m_cameraGroupBox);    // Camera table
-    m_cameraTable = new QTableWidget(0, 12);
-    QStringList headers = {"#", "Name", "Brand", "Model", "IP Address", "Port", "External Port", "Status", "Connections", "Data Transferred", "Preview", "Actions"};
+    m_cameraTable = new QTableWidget(0, 11);
+    QStringList headers = {"#", "Name", "Brand", "Model", "IP Address", "Port", "External Port", "Status", "Data Transferred", "Preview", "Actions"};
     m_cameraTable->setHorizontalHeaderLabels(headers);
     m_cameraTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_cameraTable->setAlternatingRowColors(true);
@@ -1816,9 +1977,8 @@ void MainWindow::createCentralWidget()
     m_cameraTable->setColumnWidth(5, 60);   // Port
     m_cameraTable->setColumnWidth(6, 90);   // External Port
     m_cameraTable->setColumnWidth(7, 80);   // Status
-    m_cameraTable->setColumnWidth(8, 90);   // Connections
-    m_cameraTable->setColumnWidth(9, 120);  // Data Transferred
-    m_cameraTable->setColumnWidth(10, 80);  // Preview
+    m_cameraTable->setColumnWidth(8, 120);  // Data Transferred
+    m_cameraTable->setColumnWidth(9, 80);  // Preview
     // Actions column will stretch to fill remaining space
     m_cameraTable->horizontalHeader()->setStretchLastSection(true);
     
@@ -2021,7 +2181,7 @@ void MainWindow::setupConnections()
     
     // VPN Widget
     connect(m_vpnWidget, &VpnWidget::statusChanged,
-            [this](const QString& status) {
+            this, [this](const QString& status) {
                 showMessage(QString("VPN Status: %1").arg(status));
             });
     connect(m_vpnWidget, &VpnWidget::logMessage,
@@ -2070,36 +2230,28 @@ void MainWindow::updateCameraTable()
         m_cameraTable->setItem(i, 6, new QTableWidgetItem(QString::number(camera.externalPort())));
         
         // Status
+        bool isAnyWireGuardActive = m_networkManager->isWireGuardActive();
         bool isRunning = m_cameraManager->isCameraRunning(camera.id());
         QString status;
         if (!camera.isEnabled()) {
             status = "Disabled";
-        } else if (isRunning) {
-            status = "Running";
+        } else if (isAnyWireGuardActive) {
+            status = "Connected";
         } else {
-            status = "Stopped";
+            status = "Disconnected";
         }
         
         QTableWidgetItem* statusItem = new QTableWidgetItem(status);
-        if (isRunning) {
+        if (status == "Connected") {
             statusItem->setBackground(QColor(144, 238, 144)); // Light green
-        } else if (!camera.isEnabled()) {
-            statusItem->setBackground(QColor(211, 211, 211)); // Light gray        } else {
+        } else if (status == "Disabled") {
+            statusItem->setBackground(QColor(211, 211, 211)); // Light gray
+        } else {
             statusItem->setBackground(QColor(255, 182, 193)); // Light red
         }
         m_cameraTable->setItem(i, 7, statusItem);
         
-        // Connections column - shows active connection count
-        int connectionCount = 0;
-        if (isRunning) {
-            connectionCount = m_cameraManager->getPortForwarder()->getConnectionCount(camera.id());
-        }
-        QTableWidgetItem* connectionsItem = new QTableWidgetItem(QString::number(connectionCount));
-        connectionsItem->setTextAlignment(Qt::AlignCenter);
-        if (connectionCount > 0) {
-            connectionsItem->setBackground(QColor(144, 238, 144)); // Light green
-        }
-        m_cameraTable->setItem(i, 8, connectionsItem);
+        m_cameraTable->setItem(i, 7, statusItem);
         
         // Data Transferred column - shows bytes transferred
         QString dataTransferred = "0 B";
@@ -2119,7 +2271,7 @@ void MainWindow::updateCameraTable()
         }
         QTableWidgetItem* dataItem = new QTableWidgetItem(dataTransferred);
         dataItem->setTextAlignment(Qt::AlignCenter);
-        m_cameraTable->setItem(i, 9, dataItem);
+        m_cameraTable->setItem(i, 8, dataItem);
         
         // Preview column - preview button for each camera
         QWidget* previewWidget = new QWidget();
@@ -2151,7 +2303,7 @@ void MainWindow::updateCameraTable()
         previewLayout->addWidget(previewBtn);
         previewLayout->addStretch();
         
-        m_cameraTable->setCellWidget(i, 10, previewWidget);
+        m_cameraTable->setCellWidget(i, 9, previewWidget);
         
         // Actions column - control buttons for each camera
         QWidget* actionWidget = new QWidget();
@@ -2193,7 +2345,7 @@ void MainWindow::updateCameraTable()
         actionLayout->addWidget(testBtn);
         actionLayout->addStretch();
         
-        m_cameraTable->setCellWidget(i, 11, actionWidget);
+        m_cameraTable->setCellWidget(i, 10, actionWidget);
     }
     
     // Resize columns to content
@@ -2291,7 +2443,7 @@ void MainWindow::testCamera()
     
     QTableWidgetItem* idItem = m_cameraTable->item(row, 0);
     QTableWidgetItem* ipItem = m_cameraTable->item(row, 4);  // IP Address column
-    QTableWidgetItem* testItem = m_cameraTable->item(row, 8); // Test column
+    QTableWidgetItem* testItem = m_cameraTable->item(row, 7); // Status column (used for feedback)
     
     if (!idItem || !ipItem || !testItem) return;
     

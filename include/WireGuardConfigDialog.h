@@ -54,6 +54,7 @@ private:
     QLineEdit* m_addressEdit;
     QLineEdit* m_dnsEdit;
     QSpinBox* m_listenPortSpin;
+    QSpinBox* m_mtuSpin;
     
     // Single peer configuration (simplified)
     QLineEdit* m_peerPublicKeyEdit;

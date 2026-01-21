@@ -126,6 +126,51 @@ QHostAddress NetworkInterfaceManager::getWireGuardAddress() const
     return addresses.isEmpty() ? QHostAddress() : addresses.first();
 }
 
+QHostAddress NetworkInterfaceManager::getBestLocalAddress(const QHostAddress& destAddress) const
+{
+    // Try to find an interface directly on the same subnet
+    const auto interfaces = getActiveInterfaces();
+    QHostAddress wireGuardMatch;
+    
+    for (const QNetworkInterface& netInterface : interfaces) {
+        const auto entries = netInterface.addressEntries();
+        for (const QNetworkAddressEntry& entry : entries) {
+            const QHostAddress& ip = entry.ip();
+            if (ip.protocol() == QAbstractSocket::IPv4Protocol && !ip.isLoopback()) {
+                
+                // Check if destination is in this interface's subnet
+                if (destAddress.isInSubnet(ip, entry.prefixLength())) {
+                    
+                    // Prioritize non-WireGuard interfaces for local traffic
+                    if (!isWireGuardInterface(netInterface)) {
+                        LOG_INFO(QString("Found direct local interface match for %1: %2 (%3)")
+                                 .arg(destAddress.toString())
+                                 .arg(ip.toString())
+                                 .arg(netInterface.name()), "NetworkInterfaceManager");
+                        return ip;
+                    }
+                    
+                    // Keep WireGuard match as fallback
+                    if (wireGuardMatch.isNull()) {
+                        wireGuardMatch = ip;
+                    }
+                }
+            }
+        }
+    }
+    
+    // Use WireGuard match if it's the only one found (e.g. accessing VPN resource)
+    if (!wireGuardMatch.isNull()) {
+        LOG_INFO(QString("Using WireGuard interface match for %1: %2")
+                 .arg(destAddress.toString())
+                 .arg(wireGuardMatch.toString()), "NetworkInterfaceManager");
+        return wireGuardMatch;
+    }
+    
+    // Default: Let OS decide
+    return QHostAddress::Any;
+}
+
 bool NetworkInterfaceManager::isWireGuardActive() const
 {
     const QNetworkInterface wgInterface = getWireGuardInterface();

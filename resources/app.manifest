@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">  <assemblyIdentity
-    version="2.1.5.0"
+    version="3.1.5.0"
     processorArchitecture="amd64"
     name="ViscoConnect"
     type="win32"
   />
-  <description>Visco Connect v2.1.5 - IP Camera Port Forwarding Solution</description>
+  <description>Visco Connect v3.1.5 - IP Camera Port Forwarding Solution</description>
   
   <!-- Require Administrator privileges -->
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">

@@ -50,7 +50,12 @@ bool WindowsService::installService()
 {
     SC_HANDLE schSCManager = OpenSCManager(nullptr, nullptr, SC_MANAGER_CREATE_SERVICE);
     if (!schSCManager) {
-        LOG_ERROR("Failed to open Service Control Manager", "WindowsService");
+        DWORD error = GetLastError();
+        if (error == ERROR_ACCESS_DENIED) {
+            LOG_ERROR("Failed to install service: Access Denied. Application must run as Administrator.", "WindowsService");
+        } else {
+            LOG_ERROR(QString("Failed to open Service Control Manager. Error: %1").arg(error), "WindowsService");
+        }
         return false;
     }
       QString exePath = QCoreApplication::applicationFilePath();
@@ -103,7 +108,13 @@ bool WindowsService::uninstallService()
 {
     SC_HANDLE schSCManager = OpenSCManager(nullptr, nullptr, SC_MANAGER_CONNECT);
     if (!schSCManager) {
-        LOG_ERROR("Failed to open Service Control Manager", "WindowsService");        return false;
+        DWORD error = GetLastError();
+        if (error == ERROR_ACCESS_DENIED) {
+            LOG_ERROR("Failed to uninstall service: Access Denied. Application must run as Administrator.", "WindowsService");
+        } else {
+            LOG_ERROR(QString("Failed to open Service Control Manager. Error: %1").arg(error), "WindowsService");
+        }
+        return false;
     }
     
     std::wstring wideServiceName = m_serviceName.toStdWString();

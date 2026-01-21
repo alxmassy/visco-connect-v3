@@ -86,7 +86,7 @@ REM Link the compiled objects into an MSI
 light.exe -ext WixUIExtension ^
     "%OUTPUT_DIR%\CameraServerBasic.wixobj" ^
     "%OUTPUT_DIR%\HarvestedFiles.wixobj" ^
-    -out "%OUTPUT_DIR%\ViscoConnectDemo_v2.1.5_Setup.msi"
+    -out "%OUTPUT_DIR%\ViscoConnect_v3.1.5_Setup.msi"
 
 if %errorlevel% neq 0 (
     echo ERROR: Failed to link MSI package!
@@ -99,10 +99,10 @@ echo ============================================
 echo SUCCESS: Installer created successfully!
 echo ============================================
 echo.
-echo Output: %OUTPUT_DIR%\ViscoConnectDemo_v2.1.5_Setup.msi
+echo Output: %OUTPUT_DIR%\ViscoConnect_v3.1.5_Setup.msi
 echo.
 echo To test the installer:
-echo 1. Run as Administrator: %OUTPUT_DIR%\ViscoConnectDemo_v2.1.5_Setup.msi
+echo 1. Run as Administrator: %OUTPUT_DIR%\ViscoConnect_v3.1.5_Setup.msi
 echo 2. Follow the installation wizard
 echo 3. Check that firewall rules are added
 echo 4. Verify desktop shortcut is created
