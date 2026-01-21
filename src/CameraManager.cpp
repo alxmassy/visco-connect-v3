@@ -121,18 +121,27 @@ bool CameraManager::removeCamera(const QString& id)
         return false;
     }
     
-    stopCamera(id);
-    
     CameraConfig camera = m_cameras[id];
     QString cameraName = camera.name();
     int serverId = camera.serverId();
+    QString serverCameraId = camera.serverCameraId();
     
-    // Remove from local storage first
+    // 1. Remove from local storage first and reload
+    // This removes it from m_cameras, so handleForwardingStopped won't find it
+    // and won't try to send a status update to the server (preventing 404s)
     ConfigManager::instance().removeCamera(id);
     loadConfiguration();
     
-    // Sync deletion to server
-    m_apiService->deleteCamera(id, camera.serverCameraId());
+    // 2. Now stop the port forwarding (if running)
+    // The signal handler will see the camera is gone from m_cameras and skip API update
+    if (isCameraRunning(id)) {
+        m_portForwarder->stopForwarding(id);
+        m_cameraStatus[id] = false;
+        emit cameraStopped(id);
+    }
+    
+    // 3. Finally sync deletion to server
+    m_apiService->deleteCamera(id, serverCameraId);
     
     LOG_INFO(QString("Camera removed locally: %1").arg(cameraName), "CameraManager");
     emit configurationChanged();
@@ -294,7 +303,11 @@ void CameraManager::loadConfiguration()
     QList<CameraConfig> cameras = ConfigManager::instance().getAllCameras();
     for (const CameraConfig& camera : cameras) {
         m_cameras[camera.id()] = camera;
-        m_cameraStatus[camera.id()] = false;
+        if (m_portForwarder) {
+            m_cameraStatus[camera.id()] = m_portForwarder->isForwarding(camera.id());
+        } else {
+            m_cameraStatus[camera.id()] = false;
+        }
     }
 }
 

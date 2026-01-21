@@ -1565,6 +1565,12 @@ void MainWindow::removeCamera()
                                    QMessageBox::Yes | QMessageBox::No);
     
     if (ret == QMessageBox::Yes) {
+        // Stop preview if this camera is currently being previewed
+        if (m_previewWidget->hasCamera() && m_previewWidget->getCamera().id() == cameraId) {
+            m_previewWidget->stop();
+            m_previewWidget->clearCamera();
+        }
+        
         if (m_cameraManager->removeCamera(cameraId)) {
             showMessage(QString("Camera '%1' removed successfully").arg(cameraName));
         } else {
@@ -1679,23 +1685,7 @@ void MainWindow::refreshConnectionStatistics()
         QString cameraId = idItem->data(Qt::UserRole).toString();
         bool isRunning = m_cameraManager->isCameraRunning(cameraId);
         
-        // Update connections count (column 8)
-        int connectionCount = 0;
-        if (isRunning) {
-            connectionCount = m_cameraManager->getPortForwarder()->getConnectionCount(cameraId);
-        }
-        
-        QTableWidgetItem* connectionsItem = m_cameraTable->item(i, 8);
-        if (connectionsItem) {
-            connectionsItem->setText(QString::number(connectionCount));
-            if (connectionCount > 0) {
-                connectionsItem->setBackground(QColor(144, 238, 144)); // Light green
-            } else {
-                connectionsItem->setBackground(QColor(255, 255, 255)); // White
-            }
-        }
-        
-        // Update data transferred (column 9)
+        // Update data transferred (column 8)
         QString dataTransferred = "0 B";
         if (isRunning) {
             qint64 bytes = m_cameraManager->getPortForwarder()->getBytesTransferred(cameraId);
@@ -1712,7 +1702,7 @@ void MainWindow::refreshConnectionStatistics()
             }
         }
         
-        QTableWidgetItem* dataItem = m_cameraTable->item(i, 9);
+        QTableWidgetItem* dataItem = m_cameraTable->item(i, 8);
         if (dataItem) {
             dataItem->setText(dataTransferred);
         }
@@ -1768,6 +1758,9 @@ void MainWindow::onWireGuardStateChanged(bool isActive)
     } else {
         statusBar()->showMessage("Network Disconnected", 5000);
     }
+    
+    // Refresh camera table to show new status
+    updateCameraTable();
 }
 
 void MainWindow::onEchoClientConnected(const QString& clientAddress)
@@ -1959,8 +1952,8 @@ void MainWindow::createCentralWidget()
     // Camera management group
     m_cameraGroupBox = new QGroupBox("Camera Configuration");
     QVBoxLayout* cameraLayout = new QVBoxLayout(m_cameraGroupBox);    // Camera table
-    m_cameraTable = new QTableWidget(0, 12);
-    QStringList headers = {"#", "Name", "Brand", "Model", "IP Address", "Port", "External Port", "Status", "Connections", "Data Transferred", "Preview", "Actions"};
+    m_cameraTable = new QTableWidget(0, 11);
+    QStringList headers = {"#", "Name", "Brand", "Model", "IP Address", "Port", "External Port", "Status", "Data Transferred", "Preview", "Actions"};
     m_cameraTable->setHorizontalHeaderLabels(headers);
     m_cameraTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_cameraTable->setAlternatingRowColors(true);
@@ -1974,9 +1967,8 @@ void MainWindow::createCentralWidget()
     m_cameraTable->setColumnWidth(5, 60);   // Port
     m_cameraTable->setColumnWidth(6, 90);   // External Port
     m_cameraTable->setColumnWidth(7, 80);   // Status
-    m_cameraTable->setColumnWidth(8, 90);   // Connections
-    m_cameraTable->setColumnWidth(9, 120);  // Data Transferred
-    m_cameraTable->setColumnWidth(10, 80);  // Preview
+    m_cameraTable->setColumnWidth(8, 120);  // Data Transferred
+    m_cameraTable->setColumnWidth(9, 80);  // Preview
     // Actions column will stretch to fill remaining space
     m_cameraTable->horizontalHeader()->setStretchLastSection(true);
     
@@ -2228,36 +2220,28 @@ void MainWindow::updateCameraTable()
         m_cameraTable->setItem(i, 6, new QTableWidgetItem(QString::number(camera.externalPort())));
         
         // Status
+        bool isAnyWireGuardActive = m_networkManager->isWireGuardActive();
         bool isRunning = m_cameraManager->isCameraRunning(camera.id());
         QString status;
         if (!camera.isEnabled()) {
             status = "Disabled";
-        } else if (isRunning) {
-            status = "Running";
+        } else if (isAnyWireGuardActive) {
+            status = "Connected";
         } else {
-            status = "Stopped";
+            status = "Disconnected";
         }
         
         QTableWidgetItem* statusItem = new QTableWidgetItem(status);
-        if (isRunning) {
+        if (status == "Connected") {
             statusItem->setBackground(QColor(144, 238, 144)); // Light green
-        } else if (!camera.isEnabled()) {
-            statusItem->setBackground(QColor(211, 211, 211)); // Light gray        } else {
+        } else if (status == "Disabled") {
+            statusItem->setBackground(QColor(211, 211, 211)); // Light gray
+        } else {
             statusItem->setBackground(QColor(255, 182, 193)); // Light red
         }
         m_cameraTable->setItem(i, 7, statusItem);
         
-        // Connections column - shows active connection count
-        int connectionCount = 0;
-        if (isRunning) {
-            connectionCount = m_cameraManager->getPortForwarder()->getConnectionCount(camera.id());
-        }
-        QTableWidgetItem* connectionsItem = new QTableWidgetItem(QString::number(connectionCount));
-        connectionsItem->setTextAlignment(Qt::AlignCenter);
-        if (connectionCount > 0) {
-            connectionsItem->setBackground(QColor(144, 238, 144)); // Light green
-        }
-        m_cameraTable->setItem(i, 8, connectionsItem);
+        m_cameraTable->setItem(i, 7, statusItem);
         
         // Data Transferred column - shows bytes transferred
         QString dataTransferred = "0 B";
@@ -2277,7 +2261,7 @@ void MainWindow::updateCameraTable()
         }
         QTableWidgetItem* dataItem = new QTableWidgetItem(dataTransferred);
         dataItem->setTextAlignment(Qt::AlignCenter);
-        m_cameraTable->setItem(i, 9, dataItem);
+        m_cameraTable->setItem(i, 8, dataItem);
         
         // Preview column - preview button for each camera
         QWidget* previewWidget = new QWidget();
@@ -2309,7 +2293,7 @@ void MainWindow::updateCameraTable()
         previewLayout->addWidget(previewBtn);
         previewLayout->addStretch();
         
-        m_cameraTable->setCellWidget(i, 10, previewWidget);
+        m_cameraTable->setCellWidget(i, 9, previewWidget);
         
         // Actions column - control buttons for each camera
         QWidget* actionWidget = new QWidget();
@@ -2351,7 +2335,7 @@ void MainWindow::updateCameraTable()
         actionLayout->addWidget(testBtn);
         actionLayout->addStretch();
         
-        m_cameraTable->setCellWidget(i, 11, actionWidget);
+        m_cameraTable->setCellWidget(i, 10, actionWidget);
     }
     
     // Resize columns to content
@@ -2449,7 +2433,7 @@ void MainWindow::testCamera()
     
     QTableWidgetItem* idItem = m_cameraTable->item(row, 0);
     QTableWidgetItem* ipItem = m_cameraTable->item(row, 4);  // IP Address column
-    QTableWidgetItem* testItem = m_cameraTable->item(row, 8); // Test column
+    QTableWidgetItem* testItem = m_cameraTable->item(row, 7); // Status column (used for feedback)
     
     if (!idItem || !ipItem || !testItem) return;
     
