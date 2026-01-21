@@ -1422,6 +1422,16 @@ void MainWindow::changeEvent(QEvent *event)
 
 void MainWindow::addCamera()
 {
+    QMessageBox::information(this, "Camera Configuration Advice",
+        "Make sure the Camera and PC are on the same network.\n\n"
+        "To ensure smooth performance with ViscoConnect, please configure your camera via its web interface with these settings:\n\n"
+        "- Resolution: 1280x720 (720P)\n"
+        "- Bitrate: 1024 kbps\n"
+        "- Bitrate Control: CBR (Constant Bitrate)\n"
+        "- Frame Rate: 20-25 FPS\n"
+        "- I-Frame Interval: 2x FPS (e.g., 40-50)\n\n"
+        "Incorrect settings may cause lag or connection drops.");
+
     CameraConfigDialog dialog(CameraConfig(), this);
     if (dialog.exec() == QDialog::Accepted) {
         CameraConfig camera = dialog.getCamera();
