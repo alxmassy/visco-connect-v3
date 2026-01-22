@@ -68,7 +68,7 @@ int main(int argc, char *argv[])
     
     // Set application properties
     app.setApplicationName("ViscoConnect");
-    app.setApplicationVersion("2.1.5");
+    app.setApplicationVersion("3.1.7");
     app.setOrganizationName("Visco Connect Team");
     app.setApplicationDisplayName("");
     app.setOrganizationDomain("viscoconnect.local");
@@ -88,7 +88,7 @@ int main(int argc, char *argv[])
     Logger::instance().setLogFile(appDataPath + "/visco-connect.log");
     Logger::instance().setLogLevel(LogLevel::Info);
     
-    LOG_INFO("=== Visco Connect v2.1.5 Starting ===", "Main");
+    LOG_INFO("=== Visco Connect v3.1.7 Starting ===", "Main");
     LOG_INFO(QString("Version: %1").arg(app.applicationVersion()), "Main");
     LOG_INFO(QString("Run as service: %1").arg(runAsService ? "Yes" : "No"), "Main");
       // Load configuration
@@ -179,7 +179,7 @@ int main(int argc, char *argv[])
         
         // Handle application quit cleanup
         QObject::connect(&app, &QApplication::aboutToQuit, []() {
-            LOG_INFO("=== Visco Connect v2.1.5 Shutting Down ===", "Main");
+            LOG_INFO("=== Visco Connect v3.1.7 Shutting Down ===", "Main");
         });
         
         LOG_INFO("GUI application initialized successfully", "Main");

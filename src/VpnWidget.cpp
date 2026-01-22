@@ -52,6 +52,16 @@ VpnWidget::VpnWidget(QWidget *parent)
     
     // Setup auto-reconnection timer
     m_reconnectTimer->setSingleShot(true);
+
+    // check if config already exists
+    QString configPath = getWireGuardConfigPath();
+    if (QFile::exists(configPath)) {
+        m_loadedConfigPath = configPath;
+        m_currentConfigLabel->setText(tr("Configuration: Ready (Cached)"));
+        LOG_INFO("Found cached WireGuard configuration: " + configPath, "VpnWidget");
+    } else {
+        m_currentConfigLabel->setText(tr("Configuration: Not loaded"));
+    }
     
     // Auto-connect: Simply trigger the existing connect functionality after app is fully loaded
     QTimer::singleShot(5000, this, &VpnWidget::onConnectClicked);
@@ -61,6 +71,20 @@ VpnWidget::VpnWidget(QWidget *parent)
 
 VpnWidget::~VpnWidget()
 {
+    // Fix for crash on exit: Disconnect all signals from WireGuardManager
+    // This prevents status updates from triggering slots after VpnWidget is partially destroyed
+    if (m_wireGuardManager) {
+        m_wireGuardManager->disconnect(this);
+    }
+
+    if (m_statusUpdateTimer) {
+        m_statusUpdateTimer->stop();
+    }
+    
+    if (m_reconnectTimer) {
+        m_reconnectTimer->stop();
+    }
+
     if (m_configReply) {
         m_configReply->abort();
         m_configReply->deleteLater();
@@ -492,7 +516,29 @@ void VpnWidget::onPingTestClicked()
     m_pingStatusLabel->setStyleSheet("color: #007bff; font-weight: 500; font-size: 11px;");
     m_pingTestButton->setEnabled(false);
     
-    m_pingProcess->start("ping", {"-n", "4", "10.0.0.1"});
+    // Try to determine the gateway IP from the configuration
+    QString targetIp = "10.0.0.1"; // Default fallback
+    
+    if (!m_loadedConfigPath.isEmpty() && QFile::exists(m_loadedConfigPath)) {
+        WireGuardConfig config = m_wireGuardManager->parseConfigFile(m_loadedConfigPath);
+        // Usually the gateway is part of the AllowedIPs of the first peer
+        if (!config.interfaceConfig.peers.isEmpty()) {
+            QStringList allowedIps = config.interfaceConfig.peers.first().allowedIPs;
+            if (!allowedIps.isEmpty()) {
+                // Take the first IP in the list, strip the CIDR mask
+                QString firstIp = allowedIps.first();
+                int cidrIndex = firstIp.indexOf('/');
+                if (cidrIndex > 0) {
+                    targetIp = firstIp.left(cidrIndex);
+                } else {
+                    targetIp = firstIp;
+                }
+                LOG_INFO("Targeting Gateway IP for ping test: " + targetIp, "VpnWidget");
+            }
+        }
+    }
+    
+    m_pingProcess->start("ping", {"-n", "4", targetIp});
 }
 
 void VpnWidget::onPingFinished(int exitCode, QProcess::ExitStatus exitStatus)

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(ViscoConnect VERSION 3.1.5 LANGUAGES CXX RC)
+project(ViscoConnect VERSION 3.1.7 LANGUAGES CXX RC)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -182,6 +182,9 @@ if(WIN32)
         ole32 oleaut32 uuid comdlg32
         iphlpapi mpr userenv d3d11 dxgi dxguid winspool
     )
+    
+    # Force Administrator privileges for the executable
+    target_link_options(ViscoConnect PRIVATE "/MANIFESTUAC:level='requireAdministrator' uiAccess='false'")
 endif()
 
 # Copy Qt6 DLLs to the output directory using windeployqt (Corrected Version)
