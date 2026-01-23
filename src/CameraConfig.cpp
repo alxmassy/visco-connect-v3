@@ -45,6 +45,7 @@ QJsonObject CameraConfig::toJson() const
     json["model"] = m_model;
     json["serverId"] = m_serverId;
     json["serverCameraId"] = m_serverCameraId;
+    json["streamName"] = m_streamName;
     return json;
 }
 
@@ -62,6 +63,7 @@ void CameraConfig::fromJson(const QJsonObject& json)
     m_model = json["model"].toString();
     m_serverId = json["serverId"].toInt(-1);
     m_serverCameraId = json["serverCameraId"].toString("");
+    m_streamName = json["streamName"].toString("");
     
     // Generate ID if not present (for backward compatibility)
     if (m_id.isEmpty()) {

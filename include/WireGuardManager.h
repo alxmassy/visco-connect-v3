@@ -87,6 +87,7 @@ public:
     bool disconnectTunnel(const QString& configName = QString());
     ConnectionStatus getConnectionStatus() const;
     QString getCurrentConfigName() const;
+    QString getCurrentTunnelIp() const;
     
     // Configuration parsing
     WireGuardConfig parseConfigFile(const QString& filePath);

@@ -525,9 +525,11 @@ private slots:
     
     void editCamera()
     {
+        // Store parent pointer before accept() destroys 'this'
+        QWidget* parentPtr = parentWidget();
         accept();
-        QTimer::singleShot(0, parent(), [this]() {
-            if (MainWindow* mainWindow = qobject_cast<MainWindow*>(parent())) {
+        QTimer::singleShot(0, parentPtr, [parentPtr]() {
+            if (MainWindow* mainWindow = qobject_cast<MainWindow*>(parentPtr)) {
                 mainWindow->editCamera();
             }
         });
@@ -535,9 +537,11 @@ private slots:
     
     void testConnection()
     {
+        // Store parent pointer before accept() destroys 'this'
+        QWidget* parentPtr = parentWidget();
         accept();
-        QTimer::singleShot(0, parent(), [this]() {
-            if (MainWindow* mainWindow = qobject_cast<MainWindow*>(parent())) {
+        QTimer::singleShot(0, parentPtr, [parentPtr]() {
+            if (MainWindow* mainWindow = qobject_cast<MainWindow*>(parentPtr)) {
                 mainWindow->testCamera();
             }
         });
@@ -2306,43 +2310,35 @@ void MainWindow::updateCameraTable()
         m_cameraTable->setCellWidget(i, 9, previewWidget);
         
         // Actions column - control buttons for each camera
+        // Actions column - control buttons for each camera
         QWidget* actionWidget = new QWidget();
         QHBoxLayout* actionLayout = new QHBoxLayout(actionWidget);
         actionLayout->setContentsMargins(2, 2, 2, 2);
         actionLayout->setSpacing(2);
         
-        QPushButton* startStopBtn = new QPushButton(isRunning ? "Stop" : "Start");
-        startStopBtn->setMaximumWidth(50);
-        startStopBtn->setEnabled(camera.isEnabled());
-        connect(startStopBtn, &QPushButton::clicked, [this, camera]() {
-            if (m_cameraManager->isCameraRunning(camera.id())) {
-                m_cameraManager->stopCamera(camera.id());
-            } else {
-                m_cameraManager->startCamera(camera.id());
-            }
+        // Stop Button (Stops stream on server)
+        QPushButton* stopBtn = new QPushButton("Stop");
+        stopBtn->setToolTip("Stop stream on server");
+        stopBtn->setMaximumWidth(50);
+        // Only enabled if stream name exists (meaning it was created on server)
+        stopBtn->setEnabled(!camera.streamName().isEmpty());
+        connect(stopBtn, &QPushButton::clicked, [this, camera]() {
+            m_cameraManager->stopStreamApi(camera.id());
+            showMessage(QString("Requesting stop for stream: %1").arg(camera.name()));
         });
         
-        QPushButton* restartBtn = new QPushButton("↻");
-        restartBtn->setToolTip("Restart Port Forwarding");
-        restartBtn->setMaximumWidth(30);
-        restartBtn->setEnabled(isRunning);
-        connect(restartBtn, &QPushButton::clicked, [this, camera]() {
-            m_cameraManager->getPortForwarder()->restartForwarding(camera.id());
+        // Refresh Button (Restarts stream on server)
+        QPushButton* refreshBtn = new QPushButton("↻");
+        refreshBtn->setToolTip("Refresh/Restart Stream");
+        refreshBtn->setMaximumWidth(30);
+        refreshBtn->setEnabled(!camera.serverCameraId().isEmpty());
+        connect(refreshBtn, &QPushButton::clicked, [this, camera]() {
+            m_cameraManager->refreshStreamApi(camera.id());
+             showMessage(QString("Refreshing stream for: %1").arg(camera.name()));
         });
         
-        QPushButton* testBtn = new QPushButton("Test");
-        testBtn->setMaximumWidth(40);
-        connect(testBtn, &QPushButton::clicked, [this, camera]() {
-            // Set the current camera ID for testing
-            QTableWidgetItem* idItem = m_cameraTable->item(m_cameraTable->currentRow(), 0);
-            if (idItem) {
-                testCamera();
-            }
-        });
-        
-        actionLayout->addWidget(startStopBtn);
-        actionLayout->addWidget(restartBtn);
-        actionLayout->addWidget(testBtn);
+        actionLayout->addWidget(stopBtn);
+        actionLayout->addWidget(refreshBtn);
         actionLayout->addStretch();
         
         m_cameraTable->setCellWidget(i, 10, actionWidget);

@@ -32,6 +32,10 @@ CameraManager::CameraManager(WireGuardManager* wireGuardManager, QObject *parent
             this, &CameraManager::handleCameraDeleted);
     connect(m_apiService, &CameraApiService::cameraStatusUpdated,
             this, &CameraManager::handleCameraStatusUpdated);
+    connect(m_apiService, &CameraApiService::streamStarted,
+            this, &CameraManager::handleStreamStarted);
+    connect(m_apiService, &CameraApiService::streamStopped,
+            this, &CameraManager::handleStreamStopped);
     
     // Connect to ConfigManager for user switching
     connect(&ConfigManager::instance(), &ConfigManager::userSwitched,
@@ -316,19 +320,20 @@ void CameraManager::saveConfiguration()
     // Configuration is automatically saved by ConfigManager
 }
 
-void CameraManager::handleCameraCreated(const QString& localCameraId, const QString& serverCameraId, bool success, const QString& error)
+void CameraManager::handleCameraCreated(const QString& localCameraId, const QString& serverCameraId, const QString& streamName, bool success, const QString& error)
 {
-    LOG_INFO(QString("handleCameraCreated called - LocalID: %1, ServerCameraID: %2, Success: %3, Error: %4")
-             .arg(localCameraId).arg(serverCameraId).arg(success ? "true" : "false").arg(error), "CameraManager");
+    LOG_INFO(QString("handleCameraCreated called - LocalID: %1, ServerCameraID: %2, StreamName: %3, Success: %4, Error: %5")
+             .arg(localCameraId).arg(serverCameraId).arg(streamName).arg(success ? "true" : "false").arg(error), "CameraManager");
              
     if (success && !localCameraId.isEmpty() && !serverCameraId.isEmpty()) {
-        // Update the local camera with the server's camera ID
+        // Update the local camera with the server's camera ID and Stream Name
         if (m_cameras.contains(localCameraId)) {
             CameraConfig camera = m_cameras[localCameraId];
             LOG_INFO(QString("Before update - Camera: %1, ServerCameraID: %2")
                      .arg(camera.name()).arg(camera.serverCameraId()), "CameraManager");
                      
             camera.setServerCameraId(serverCameraId);
+            camera.setStreamName(streamName);
             
             LOG_INFO(QString("After setServerCameraId - Camera: %1, ServerCameraID: %2")
                      .arg(camera.name()).arg(camera.serverCameraId()), "CameraManager");
@@ -345,6 +350,10 @@ void CameraManager::handleCameraCreated(const QString& localCameraId, const QStr
                 startCamera(localCameraId);
                 LOG_INFO(QString("Camera started after server confirmation: %1").arg(camera.name()), "CameraManager");
             }
+            
+            // Call start_stream API as requested
+            LOG_INFO(QString("Initiating stream on server for camera: %1 (Server ID: %2)").arg(camera.name()).arg(serverCameraId), "CameraManager");
+            m_apiService->startStream(camera);
         } else {
             LOG_WARNING(QString("Camera not found in local map: %1").arg(localCameraId), "CameraManager");
         }
@@ -395,6 +404,60 @@ void CameraManager::handleCameraStatusUpdated(const QString& localCameraId, bool
     } else {
         LOG_WARNING(QString("Failed to update camera status on server: %1 - %2")
                    .arg(localCameraId, error), "CameraManager");
+    }
+}
+
+void CameraManager::handleStreamStarted(const QString& serverCameraId, bool success, const QString& error)
+{
+    if (success) {
+        LOG_INFO(QString("Stream start initiated successfully on server: %1").arg(serverCameraId), "CameraManager");
+    } else {
+        LOG_WARNING(QString("Failed to initiate stream on server: %1 - %2")
+                   .arg(serverCameraId, error), "CameraManager");
+    }
+}
+
+void CameraManager::stopStreamApi(const QString& cameraId)
+{
+    if (!m_cameras.contains(cameraId)) {
+        LOG_WARNING(QString("Cannot stop stream for non-existent camera: %1").arg(cameraId), "CameraManager");
+        return;
+    }
+    
+    const CameraConfig& camera = m_cameras[cameraId];
+    if (camera.streamName().isEmpty()) {
+        LOG_WARNING(QString("Cannot stop stream: Stream name missing for camera %1").arg(camera.name()), "CameraManager");
+        return;
+    }
+    
+    LOG_INFO(QString("Requesting stream stop for camera: %1 (Stream: %2)").arg(camera.name(), camera.streamName()), "CameraManager");
+    m_apiService->stopStream(camera.streamName());
+}
+
+void CameraManager::refreshStreamApi(const QString& cameraId)
+{
+    if (!m_cameras.contains(cameraId)) {
+        LOG_WARNING(QString("Cannot refresh stream for non-existent camera: %1").arg(cameraId), "CameraManager");
+        return;
+    }
+    
+    const CameraConfig& camera = m_cameras[cameraId];
+    if (camera.serverCameraId().isEmpty()) {
+        LOG_WARNING(QString("Cannot refresh stream: Server ID missing for camera %1").arg(camera.name()), "CameraManager");
+        return;
+    }
+    
+    LOG_INFO(QString("Refreshing stream for camera: %1").arg(camera.name()), "CameraManager");
+    m_apiService->startStream(camera);
+}
+
+void CameraManager::handleStreamStopped(const QString& streamName, bool success, const QString& error)
+{
+    if (success) {
+        LOG_INFO(QString("Stream stopped successfully on server: %1").arg(streamName), "CameraManager");
+    } else {
+        LOG_WARNING(QString("Failed to stop stream on server: %1 - %2")
+                   .arg(streamName, error), "CameraManager");
     }
 }
 

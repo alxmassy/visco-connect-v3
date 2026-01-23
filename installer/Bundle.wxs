@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:bal="http://schemas.microsoft.com/wix/BalExtension"
+     xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
+
+  <!-- ===================== BOOTSTRAPPER BUNDLE ===================== -->
+  <Bundle Name="Visco Connect Setup v3.1.7"
+          Version="3.1.7.0"
+          Manufacturer="Visco Technologies"
+          UpgradeCode="B2C3D4E5-F6A7-8901-BCDE-234567890ABC"
+          IconSourceFile="logo.ico"
+          AboutUrl="https://viscotechnologies.com"
+          DisableModify="yes"
+          Compressed="yes">
+
+    <!-- Registry search to detect if VC++ runtime is already installed -->
+    <!-- WinBA/Bundle-level search used for variables -->
+    <util:RegistrySearch Id="VCRuntimeRegistrySearch"
+                         Root="HKLM"
+                         Key="SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64"
+                         Value="Installed"
+                         Variable="VCRuntimeInstalled"
+                         Result="value" />
+
+    <!-- Use the standard WiX bootstrapper UI -->
+    <BootstrapperApplicationRef Id="WixStandardBootstrapperApplication.RtfLicense">
+      <bal:WixStandardBootstrapperApplication
+        LicenseFile="License.rtf"
+        LogoFile="logo.ico"
+        SuppressOptionsUI="yes" />
+    </BootstrapperApplicationRef>
+
+    <!-- ===================== PACKAGE CHAIN ===================== -->
+    <Chain>
+      
+      <!-- Package 1: Visual C++ Redistributable -->
+      <!-- DetectCondition: Check if variable VCRuntimeInstalled (from registry search) is present/true -->
+      <ExePackage Id="VCRedist"
+                  Name="Microsoft Visual C++ Redistributable"
+                  SourceFile="vc_redist.x64.exe"
+                  DownloadUrl="https://aka.ms/vs/17/release/vc_redist.x64.exe"
+                  InstallCommand="/install /quiet /norestart"
+                  RepairCommand="/repair /quiet /norestart"
+                  UninstallCommand="/uninstall /quiet /norestart"
+                  PerMachine="yes"
+                  Vital="yes"
+                  Permanent="yes"
+                  DetectCondition="VCRuntimeInstalled" />
+
+      <!-- Package 2: Visco Connect MSI -->
+      <MsiPackage Id="ViscoConnectMsi"
+                  SourceFile="output\ViscoConnect_v3.1.7_Setup.msi"
+                  Vital="yes"
+                  DisplayInternalUI="no" />
+
+    </Chain>
+
+  </Bundle>
+
+</Wix>

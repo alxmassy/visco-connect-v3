@@ -18,7 +18,8 @@ enum class SyncOperationType {
     CREATE,
     UPDATE,
     DELETE_CAMERA,  // Renamed to avoid Windows macro conflict
-    STATUS_UPDATE
+    STATUS_UPDATE,
+    START_STREAM
 };
 
 // Structure for queued sync operations
@@ -49,6 +50,8 @@ public:
     void deleteCamera(const QString& localCameraId, const QString& serverCameraId);
     void updateCameraStatus(const QString& localCameraId, const QString& serverCameraId, bool isActive);
     void updateCameraStatusWithFullData(const CameraConfig& camera, bool isActive);
+    void startStream(const CameraConfig& camera);
+    void stopStream(const QString& streamName);
 
     // Sync management
     void processSyncQueue();
@@ -57,12 +60,15 @@ public:
 
     // Utility methods
     static QString constructRtspUrl(const CameraConfig& camera);
+    static QString constructRtspUrlWithExternalEndpoint(const CameraConfig& camera, const QString& ip, int port);
 
 signals:
-    void cameraCreated(const QString& localCameraId, const QString& serverCameraId, bool success, const QString& error);
+    void cameraCreated(const QString& localCameraId, const QString& serverCameraId, const QString& streamName, bool success, const QString& error);
     void cameraUpdated(const QString& localCameraId, bool success, const QString& error);
     void cameraDeleted(const QString& localCameraId, bool success, const QString& error);
     void cameraStatusUpdated(const QString& localCameraId, bool success, const QString& error);
+    void streamStarted(const QString& serverCameraId, bool success, const QString& error);
+    void streamStopped(const QString& streamName, bool success, const QString& error);
     void syncCompleted();
     void syncProgress(int completed, int total);
     void networkStatusChanged(bool isOnline);
@@ -72,6 +78,7 @@ private slots:
     void onUpdateCameraFinished();
     void onDeleteCameraFinished();
     void onStatusUpdateFinished();
+    void onStartStreamFinished();
     void onNetworkError(QNetworkReply::NetworkError error);
     void onSyncTimerTimeout();
     void checkNetworkConnectivity();

@@ -96,18 +96,70 @@ if %errorlevel% neq 0 (
 
 echo.
 echo ============================================
-echo SUCCESS: Installer created successfully!
+echo MSI package created successfully!
 echo ============================================
 echo.
-echo Output: %OUTPUT_DIR%\ViscoConnect_v3.1.7_Setup.msi
-echo.
-echo To test the installer:
-echo 1. Run as Administrator: %OUTPUT_DIR%\ViscoConnect_v3.1.7_Setup.msi
-echo 2. Follow the installation wizard
-echo 3. Check that firewall rules are added
-echo 4. Verify desktop shortcut is created
+echo MSI Output: %OUTPUT_DIR%\ViscoConnect_v3.1.7_Setup.msi
 echo.
 
+REM ===================== BOOTSTRAPPER BUILD =====================
+echo Step 5: Building bootstrapper bundle...
+
+REM Check if VC++ Redistributable exists
+if not exist "%INSTALLER_DIR%\vc_redist.x64.exe" (
+    echo.
+    echo WARNING: vc_redist.x64.exe not found in installer directory!
+    echo.
+    echo To create a standalone installer that works on any PC:
+    echo 1. Download from: https://aka.ms/vs/17/release/vc_redist.x64.exe
+    echo 2. Save to: %INSTALLER_DIR%\vc_redist.x64.exe
+    echo 3. Re-run this script
+    echo.
+    echo Skipping bootstrapper build. MSI-only installer created.
+    goto :cleanup
+)
+
+echo Compiling Bundle.wxs...
+candle.exe -arch x64 ^
+    -ext WixBalExtension ^
+    -ext WixUtilExtension ^
+    "%INSTALLER_DIR%\Bundle.wxs" ^
+    -out "%OUTPUT_DIR%\\"
+
+if %errorlevel% neq 0 (
+    echo ERROR: Failed to compile Bundle.wxs!
+    pause
+    exit /b 1
+)
+
+echo Step 6: Linking bootstrapper executable...
+light.exe ^
+    -ext WixBalExtension ^
+    -ext WixUtilExtension ^
+    "%OUTPUT_DIR%\Bundle.wixobj" ^
+    -out "%OUTPUT_DIR%\ViscoConnect_v3.1.7_Setup.exe"
+
+if %errorlevel% neq 0 (
+    echo ERROR: Failed to link bootstrapper!
+    pause
+    exit /b 1
+)
+
+echo.
+echo ============================================
+echo SUCCESS: Bootstrapper created successfully!
+echo ============================================
+echo.
+echo STANDALONE INSTALLER (recommended):
+echo   %OUTPUT_DIR%\ViscoConnect_v3.1.7_Setup.exe
+echo   - Includes VC++ Runtime
+echo   - Works on any Windows PC
+echo.
+echo MSI ONLY (requires VC++ Runtime pre-installed):
+echo   %OUTPUT_DIR%\ViscoConnect_v3.1.7_Setup.msi
+echo.
+
+:cleanup
 REM Clean up intermediate files
 del "%OUTPUT_DIR%\*.wixobj" 2>nul
 del "%OUTPUT_DIR%\*.wixpdb" 2>nul

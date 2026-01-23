@@ -200,6 +200,12 @@ QString AuthDialog::getCurrentAuthToken()
     return (!tok.isEmpty() && QDateTime::currentSecsSinceEpoch()<exp)?tok:QString();
 }
 
+int AuthDialog::getUserId()
+{
+    QSettings s("ViscoConnect", "Auth");
+    return s.value("user_id", -1).toInt();
+}
+
 QString AuthDialog::getBearerToken()
 {
     QString token = AuthDialog::getCurrentAuthToken();

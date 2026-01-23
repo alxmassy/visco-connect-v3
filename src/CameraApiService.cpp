@@ -169,6 +169,117 @@ void CameraApiService::updateCameraStatus(const QString& localCameraId, const QS
     performCameraStatusUpdate(localCameraId, serverCameraId, status);
 }
 
+void CameraApiService::startStream(const CameraConfig& camera)
+{
+    QString token = AuthDialog::getCurrentAuthToken();
+    QJsonObject json;
+    
+    // Use the stream_name from the camera config (retrieved from server during creation)
+    if (!camera.streamName().isEmpty()) {
+        json["stream_name"] = camera.streamName();
+    } else {
+        // Fallback or log warning if stream name is missing
+        LOG_WARNING("Stream Name missing in camera config", "CameraApiService");
+        json["stream_name"] = QString("%1_%2").arg("unknown").arg(camera.name());
+    }
+    
+    // Construct RTSP URL with external IP and port
+    // e.g. rtsp://username:password@[EXTERNAL_IP]:[EXTERNAL_PORT]/path...
+    QString externalIp = m_wireGuardManager->getCurrentTunnelIp();
+    if (externalIp.isEmpty()) {
+        externalIp = "127.0.0.1"; // Fallback, though likely won't work for external server
+        LOG_WARNING("WireGuard tunnel IP not found, using localhost fallback", "CameraApiService");
+    }
+    
+    json["rtsp_url"] = constructRtspUrlWithExternalEndpoint(camera, externalIp, camera.externalPort());
+    
+    QString serverCameraId = camera.serverCameraId();
+    if (serverCameraId.isEmpty()) {
+        serverCameraId = camera.id(); // Fallback
+    }
+
+    if (token.isEmpty()) {
+        SyncOperation op(SyncOperationType::START_STREAM, camera.id(), camera, QString(), serverCameraId);
+        queueOperation(op);
+        LOG_INFO(QString("Queued stream start (no token): Stream Name %1").arg(json["stream_name"].toString()), "CameraApiService");
+        return;
+    }
+    
+    if (!m_isOnline) {
+        SyncOperation op(SyncOperationType::START_STREAM, camera.id(), camera, QString(), serverCameraId);
+        queueOperation(op);
+        LOG_INFO(QString("Queued stream start (offline): Stream Name %1").arg(json["stream_name"].toString()), "CameraApiService");
+        // Trigger a connectivity check to see if we can go online
+        QTimer::singleShot(1000, this, &CameraApiService::checkNetworkConnectivity);
+        return;
+    }
+    
+    // Endpoint: /streams/start on Port 8001
+    QUrl baseUrl(m_baseUrl);
+    baseUrl.setPort(8001);
+    
+    QNetworkRequest request(QUrl(QString("%1/streams/start").arg(baseUrl.toString())));
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    request.setRawHeader("Authorization", QString("Bearer %1").arg(token).toUtf8());
+    
+    QJsonDocument doc(json);
+    
+    QNetworkReply* reply = m_networkManager->post(request, doc.toJson());
+    
+    m_replyToOperationMap[reply] = "start_stream";
+    m_replyCameraIdMap[reply] = serverCameraId;
+    
+    connect(reply, &QNetworkReply::finished, this, &CameraApiService::onStartStreamFinished);
+    connect(reply, QOverload<QNetworkReply::NetworkError>::of(&QNetworkReply::errorOccurred),
+            this, &CameraApiService::onNetworkError);
+    
+    LOG_INFO(QString("Starting stream on server: Stream Name: %1, RTSP: %2").arg(json["stream_name"].toString(), json["rtsp_url"].toString()), "CameraApiService");
+}
+
+void CameraApiService::stopStream(const QString& streamName)
+{
+    if (streamName.isEmpty()) {
+        LOG_WARNING("Cannot stop stream with empty name", "CameraApiService");
+        emit streamStopped("", false, "Empty stream name");
+        return;
+    }
+    
+    // Use port 8001 for stream operations
+    QUrl baseUrl(m_baseUrl);
+    baseUrl.setPort(8001);
+    
+    QNetworkRequest request(QUrl(QString("%1/streams/stop/%2").arg(baseUrl.toString(), streamName)));
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    QString token = AuthDialog::getCurrentAuthToken();
+    if (!token.isEmpty()) {
+        request.setRawHeader("Authorization", QString("Bearer %1").arg(token).toUtf8());
+    }
+    
+    LOG_INFO(QString("Stopping stream on server: %1 (Port 8001)").arg(streamName), "CameraApiService");
+    
+    QNetworkReply* reply = m_networkManager->post(request, QByteArray());
+    
+    // Store streamName in reply map to retrieve it later (though we capture it in lambda too)
+    // Actually we can just use the lambda capture for simplicity
+    
+    connect(reply, &QNetworkReply::finished, this, [this, reply, streamName]() {
+        bool success = false;
+        QString error;
+        
+        if (reply->error() == QNetworkReply::NoError) {
+            LOG_INFO(QString("Stream stopped successfully on server: %1").arg(streamName), "CameraApiService");
+            success = true;
+        } else {
+            error = reply->errorString();
+            LOG_ERROR(QString("Failed to stop stream on server: %1 - %2").arg(streamName, error), "CameraApiService");
+            showApiError("stop stream", error);
+        }
+        
+        reply->deleteLater();
+        emit streamStopped(streamName, success, error);
+    });
+}
+
 void CameraApiService::onCreateCameraFinished()
 {
     QNetworkReply* reply = qobject_cast<QNetworkReply*>(sender());
@@ -218,16 +329,26 @@ void CameraApiService::onCreateCameraFinished()
         }
         
         if (!serverCameraId.isEmpty()) {
-            LOG_INFO(QString("Camera created successfully on server: %1 (Server Camera ID: %2)").arg(cameraId).arg(serverCameraId), "CameraApiService");
-            emit cameraCreated(cameraId, serverCameraId, true, QString());
+            QString streamName;
+            if (response.contains("stream_name")) {
+                streamName = response["stream_name"].toString();
+            } else {
+                // Fallback attempt to construct it if missing from server response, or leave empty
+                LOG_WARNING("stream_name missing in create response", "CameraApiService");
+            }
+            
+            LOG_INFO(QString("Camera created successfully on server: %1 (Server Camera ID: %2, Stream Name: %3)")
+                     .arg(cameraId).arg(serverCameraId).arg(streamName), "CameraApiService");
+                     
+            emit cameraCreated(cameraId, serverCameraId, streamName, true, QString());
         } else {
             LOG_WARNING(QString("Camera created on server but no valid camera_id returned: %1").arg(cameraId), "CameraApiService");
-            emit cameraCreated(cameraId, QString(), false, "No valid server camera_id returned");
+            emit cameraCreated(cameraId, QString(), QString(), false, "No valid server camera_id returned");
         }
     } else {
         QString error = QString("Server returned status code: %1, Response: %2").arg(statusCode).arg(QString::fromUtf8(data));
         LOG_ERROR(QString("Failed to create camera on server: %1 - %2").arg(cameraId, error), "CameraApiService");
-        emit cameraCreated(cameraId, QString(), false, error);
+        emit cameraCreated(cameraId, QString(), QString(), false, error);
         showApiError("create camera", error);
     }
 }
@@ -303,6 +424,30 @@ void CameraApiService::onStatusUpdateFinished()
     }
 }
 
+void CameraApiService::onStartStreamFinished()
+{
+    QNetworkReply* reply = qobject_cast<QNetworkReply*>(sender());
+    if (!reply) return;
+    
+    QString serverCameraId = m_replyCameraIdMap.take(reply);
+    m_replyToOperationMap.remove(reply);
+    
+    int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    QByteArray data = reply->readAll();
+    reply->deleteLater();
+    
+    if (statusCode == 200 || statusCode == 201 || statusCode == 204) {
+        LOG_INFO(QString("Stream started successfully on server: %1").arg(serverCameraId), "CameraApiService");
+        emit streamStarted(serverCameraId, true, QString());
+    } else {
+        QString error = QString("Server returned status code: %1, Response: %2").arg(statusCode).arg(QString::fromUtf8(data));
+        LOG_ERROR(QString("Failed to start stream on server: %1 - %2").arg(serverCameraId, error), "CameraApiService");
+        emit streamStarted(serverCameraId, false, error);
+        // We don't show a popup error for this as it might be a background thing, or we can?
+        // Let's stick to logging for now to not interrupt user if it's secondary.
+    }
+}
+
 void CameraApiService::onNetworkError(QNetworkReply::NetworkError error)
 {
     QNetworkReply* reply = qobject_cast<QNetworkReply*>(sender());
@@ -330,13 +475,15 @@ void CameraApiService::onNetworkError(QNetworkReply::NetworkError error)
     
     // Emit appropriate signals based on operation type
     if (operation == "create") {
-        emit cameraCreated(cameraId, QString(), false, errorString);
+        emit cameraCreated(cameraId, QString(), QString(), false, errorString);
     } else if (operation == "update") {
         emit cameraUpdated(cameraId, false, errorString);
     } else if (operation == "delete") {
         emit cameraDeleted(cameraId, false, errorString);
     } else if (operation == "status_update" || operation == "status_update_full") {
         emit cameraStatusUpdated(cameraId, false, errorString);
+    } else if (operation == "start_stream") {
+        emit streamStarted(cameraId, false, errorString);
     }
     
     showApiError(operation, errorString);
@@ -425,6 +572,14 @@ void CameraApiService::processNextSyncOperation()
                 }
             } else {
                 LOG_WARNING(QString("Cannot update camera status - no server ID: %1").arg(operation.localCameraId), "CameraApiService");
+            }
+            break;
+        case SyncOperationType::START_STREAM:
+            LOG_INFO(QString("Syncing start stream: Stream Name %1").arg(operation.serverCameraId), "CameraApiService");
+            if (!operation.camera.id().isEmpty()) {
+                startStream(operation.camera);
+            } else {
+                LOG_WARNING("Cannot sync start stream - missing camera config", "CameraApiService");
             }
             break;
     }
@@ -581,6 +736,56 @@ QString CameraApiService::constructRtspUrl(const CameraConfig& camera)
     
     return rtspUrl;
 }
+
+QString CameraApiService::constructRtspUrlWithExternalEndpoint(const CameraConfig& camera, const QString& ip, int port)
+{
+    if (ip.isEmpty()) {
+        return QString();
+    }
+    
+    QString brand = camera.brand().toLower();
+    QString rtspPath;
+    
+    // Brand-specific RTSP paths
+    if (brand.contains("hikvision")) {
+        rtspPath = "/Streaming/Channels/101";
+    } else if (brand.contains("dahua")) {
+        rtspPath = "/cam/realmonitor?channel=1&subtype=0";
+    } else if (brand.contains("cp plus") || brand.contains("cpplus")) {
+        rtspPath = "/cam/realmonitor?channel=1&subtype=0";
+    } else if (brand.contains("axis")) {
+        rtspPath = "/axis-media/media.amp";
+    } else if (brand.contains("onvif")) {
+        rtspPath = "/onvif1";
+    } else {
+        // Generic RTSP path
+        rtspPath = "/stream1";
+    }
+    
+    QString rtspUrl;
+    if (!camera.username().isEmpty() && !camera.password().isEmpty()) {
+        rtspUrl = QString("rtsp://%1:%2@%3:%4%5")
+                  .arg(camera.username())
+                  .arg(camera.password())
+                  .arg(ip)
+                  .arg(port)
+                  .arg(rtspPath);
+    } else if (!camera.username().isEmpty()) {
+        rtspUrl = QString("rtsp://%1@%2:%3%4")
+                  .arg(camera.username())
+                  .arg(ip)
+                  .arg(port)
+                  .arg(rtspPath);
+    } else {
+        rtspUrl = QString("rtsp://%1:%2%3")
+                  .arg(ip)
+                  .arg(port)
+                  .arg(rtspPath);
+    }
+    
+    return rtspUrl;
+}
+
 
 void CameraApiService::showApiError(const QString& operation, const QString& error)
 {

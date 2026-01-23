@@ -21,7 +21,8 @@ public:
     QString brand() const { return m_brand; }
     QString model() const { return m_model; }
     int serverId() const { return m_serverId; }
-    QString serverCameraId() const { return m_serverCameraId; }    // Setters
+    QString serverCameraId() const { return m_serverCameraId; }
+    QString streamName() const { return m_streamName; }    // Setters
     void setName(const QString& name) { m_name = name; }
     void setIpAddress(const QString& ipAddress) { m_ipAddress = ipAddress; }
     void setPort(int port) { m_port = port; }
@@ -33,6 +34,7 @@ public:
     void setModel(const QString& model) { m_model = model; }
     void setServerId(int serverId) { m_serverId = serverId; }
     void setServerCameraId(const QString& serverCameraId) { m_serverCameraId = serverCameraId; }
+    void setStreamName(const QString& streamName) { m_streamName = streamName; }
 
     // JSON serialization
     QJsonObject toJson() const;
@@ -54,6 +56,7 @@ private:
     QString m_model;
     int m_serverId;
     QString m_serverCameraId;
+    QString m_streamName;
 };
 
 #endif // CAMERACONFIG_H

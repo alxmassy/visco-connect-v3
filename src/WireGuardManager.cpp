@@ -9,7 +9,10 @@
 #include <QCryptographicHash>
 #include <QDebug>
 #include <QThread>
-#include <winsvc.h>
+#include <QNetworkInterface>
+#include <QNetworkInterface>
+#include <winsvc.h> 
+
 
 // Windows service definitions that might not be in older headers
 #ifndef SERVICE_CONFIG_SERVICE_SID_INFO
@@ -319,6 +322,59 @@ QString WireGuardManager::getCurrentConfigName() const
 {
     return m_currentConfigName;
 }
+
+QString WireGuardManager::getCurrentTunnelIp() const
+{
+    // 1. Try internal state if we own the connection
+    if (!m_currentConfigName.isEmpty()) {
+        WireGuardConfig config = const_cast<WireGuardManager*>(this)->loadConfig(m_currentConfigName);
+        if (!config.interfaceConfig.addresses.isEmpty()) {
+            QString addr = config.interfaceConfig.addresses.first();
+            // Remove CIDR suffix if present (e.g., 10.0.0.2/32 -> 10.0.0.2)
+            int slashIdx = addr.indexOf('/');
+            if (slashIdx != -1) {
+                addr = addr.left(slashIdx);
+            }
+            return addr;
+        }
+    }
+    
+    // 2. Fallback: Search all system interfaces for any WireGuard-like interface
+    QList<QNetworkInterface> interfaces = QNetworkInterface::allInterfaces();
+    
+    // Log available interfaces for debugging
+    QStringList interfaceNames;
+    for (const QNetworkInterface& iface : interfaces) {
+        interfaceNames << QString("%1 (%2)").arg(iface.humanReadableName(), iface.name());
+    }
+    // const_cast to emit logMessage from const method
+    const_cast<WireGuardManager*>(this)->emit logMessage(QString("Detected Network Interfaces: %1").arg(interfaceNames.join(", ")));
+    
+    for (const QNetworkInterface& iface : interfaces) {
+        QString name = iface.name().toLower();
+        QString humanName = iface.humanReadableName().toLower();
+        
+        // Robust check for WireGuard interfaces (similar to NetworkInterfaceManager)
+        bool isWireGuard = name.startsWith("wg") || 
+                           name.contains("wireguard") || 
+                           name.contains("tun") ||
+                           humanName.contains("wireguard");
+
+        if (isWireGuard) {
+            QList<QNetworkAddressEntry> entries = iface.addressEntries();
+            for (const QNetworkAddressEntry& entry : entries) {
+                if (entry.ip().protocol() == QAbstractSocket::IPv4Protocol && !entry.ip().isLoopback()) {
+                    QString ip = entry.ip().toString();
+                    const_cast<WireGuardManager*>(this)->emit logMessage(QString("Found active WireGuard interface '%1' with IP: %2").arg(iface.humanReadableName(), ip));
+                    return ip;
+                }
+            }
+        }
+    }
+    
+    return QString();
+}
+
 
 WireGuardConfig WireGuardManager::parseConfigFile(const QString& filePath)
 {

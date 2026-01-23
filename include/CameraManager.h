@@ -31,7 +31,12 @@ public:
     void stopCamera(const QString& id);
     void startAllCameras();
     void stopAllCameras();
-      // Status
+    
+    // API Stream Control
+    void stopStreamApi(const QString& cameraId);
+    void refreshStreamApi(const QString& cameraId);
+
+    // Status
     bool isCameraRunning(const QString& id) const;
     QStringList getRunningCameras() const;
     QList<CameraConfig> getAllCameras() const;
@@ -56,10 +61,12 @@ private slots:
     void handleConnectionClosed(const QString& cameraId, const QString& clientAddress);
     
     // API service slots
-        void handleCameraCreated(const QString& localCameraId, const QString& serverCameraId, bool success, const QString& error);
+    void handleCameraCreated(const QString& localCameraId, const QString& serverCameraId, const QString& streamName, bool success, const QString& error);
     void handleCameraUpdated(const QString& localCameraId, bool success, const QString& error);
     void handleCameraDeleted(const QString& localCameraId, bool success, const QString& error);
     void handleCameraStatusUpdated(const QString& localCameraId, bool success, const QString& error);
+    void handleStreamStarted(const QString& serverCameraId, bool success, const QString& error);
+    void handleStreamStopped(const QString& streamName, bool success, const QString& error);
     
     // User switching slot
     void handleUserSwitched(const QString& userEmail);
