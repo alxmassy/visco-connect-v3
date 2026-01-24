@@ -237,16 +237,7 @@ if %errorlevel% equ 0 (
     goto :compiler_found
 )
 
-REM Check for Visual Studio "18" (Preview/Newer Build Tools)
-if exist "%ProgramFiles(x86)%\Microsoft Visual Studio\18\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" (
-    call "%ProgramFiles(x86)%\Microsoft Visual Studio\18\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64 >nul 2>&1
-    set "COMPILER_TYPE=MSVC (VS18 BuildTools)"
-    set "CMAKE_GENERATOR=Visual Studio 17 2022"
-    set "VS_INSTALL_PATH=%ProgramFiles(x86)%\Microsoft Visual Studio\18\BuildTools"
-    set "COMPILER_FOUND=1"
-    echo   [OK] Using Visual Studio 18 BuildTools
-    goto :compiler_found
-)
+REM VS 18 check removed to prefer vswhere detection
 
 REM Check using vswhere (Recommended method)
 set "VSWHERE_PATH=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
@@ -255,14 +246,17 @@ if exist "%VSWHERE_PATH%" (
     echo   [INFO] vswhere found. Querying for Visual Studio...
     
     REM Debug: Show raw output
-    "%VSWHERE_PATH%" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath > vswhere_output.txt
+    "%VSWHERE_PATH%" -latest -version "[17.0,18.0)" -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath > vswhere_output.txt
     set /p VSWHERE_DEBUG=<vswhere_output.txt
     echo   [INFO] vswhere output: !VSWHERE_DEBUG!
-    del vswhere_output.txt
     
-    for /f "usebackq tokens=*" %%i in (`"%VSWHERE_PATH%" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do (
+    for /f "usebackq tokens=*" %%i in ("vswhere_output.txt") do (
         set "VS_INSTALL_PATH=%%i"
     )
+    
+    REM Clean up output file
+    if exist vswhere_output.txt del vswhere_output.txt
+
     if defined VS_INSTALL_PATH (
         echo   [INFO] vswhere returned path: "!VS_INSTALL_PATH!"
         if exist "!VS_INSTALL_PATH!\VC\Auxiliary\Build\vcvarsall.bat" (
@@ -393,9 +387,10 @@ if "%CLEAN_BUILD%"=="1" (
 REM Clean previous build if it exists with different configuration
 if exist "build\CMakeCache.txt" (
     echo   [INFO] Found existing build configuration...
-    findstr /C:"%CMAKE_GENERATOR%" build\CMakeCache.txt >nul 2>&1
+    REM Check for exact generator match in CMakeCache to avoid false positives
+    findstr /C:"CMAKE_GENERATOR:INTERNAL=%CMAKE_GENERATOR%" build\CMakeCache.txt >nul 2>&1
     if %errorlevel% neq 0 (
-        echo   [INFO] Different generator detected, cleaning build directory...
+        echo   [INFO] Different generator detected ^(or cache invalid^), cleaning build directory...
         if exist "build" rmdir /s /q build
     )
 )
@@ -414,7 +409,7 @@ set "CMAKE_ARGS=-DCMAKE_BUILD_TYPE=%BUILD_TYPE% -DCMAKE_PREFIX_PATH=%CMAKE_PREFI
 
 REM Add generator instance if we found a path (helps CMake find VS in non-standard locations)
 if defined VS_INSTALL_PATH (
-    set "CMAKE_ARGS=!CMAKE_ARGS! -DCMAKE_GENERATOR_INSTANCE=\"!VS_INSTALL_PATH!\""
+    set "CMAKE_ARGS=!CMAKE_ARGS! -DCMAKE_GENERATOR_INSTANCE="!VS_INSTALL_PATH!""
 )
 
 if "%COMPILER_TYPE%"=="MinGW" (
@@ -428,10 +423,11 @@ if %errorlevel% neq 0 (
     echo   [ERROR] CMake configuration failed with error code %errorlevel%!
     echo.
     echo   Troubleshooting steps:
-    echo   1. Check that Qt 6.5.3 is properly installed
-    echo   2. Verify all Qt modules are available (Core, Widgets, Network)
-    echo   3. Make sure the compiler is properly set up
-    echo   4. Check CMake version (3.16+ required)
+    echo   1. Try running 'build.bat --clean' to clear previous build configuration
+    echo   2. Check that Qt 6.5.3 is properly installed
+    echo   3. Verify all Qt modules are available (Core, Widgets, Network)
+    echo   4. Make sure the compiler is properly set up
+    echo   5. Check CMake version (3.16+ required)
     echo.
     echo   Current environment:
     echo   - Qt Path: %QT_PATH%

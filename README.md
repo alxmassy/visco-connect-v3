@@ -39,7 +39,7 @@ Device A -> 10.0.0.2:8553 -> Device B -> 192.168.1.202:554 (Camera 3)
 - **Operating System**: Windows 10/11
 - **Qt Framework**: Qt 6.5.3 or later
 - **Build Tools**: CMake 3.16 or later
-- **Compiler**: Visual Studio 2019/2022 or MinGW-w64
+- **Compiler**: Visual Studio 2022 or MinGW-w64
 - **Network**: VPN connection with P2P capability
 - **For VPN Features**: Administrator privileges and WireGuard DLLs (tunnel.dll, wireguard.dll)
 
